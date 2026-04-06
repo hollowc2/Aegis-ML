@@ -1,0 +1,1 @@
+"""Gradio standalone demo UI."""

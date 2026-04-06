@@ -1,0 +1,104 @@
+version: "3.9"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Aegis-ML Docker Compose
+#
+# Services:
+#   aegis-ml   — The main FastAPI guardrails service
+#   aegis-demo — Optional Gradio demo UI
+#
+# Usage:
+#   # Start guardrails service only
+#   docker compose up aegis-ml
+#
+#   # Start both service + demo UI
+#   docker compose up
+#
+#   # Production (detached)
+#   docker compose up -d --build
+# ══════════════════════════════════════════════════════════════════════════════
+
+services:
+  # ── Main Guardrails Service ─────────────────────────────────────────────────
+  aegis-ml:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        EXTRAS: ""       # Set to "hf" to include HuggingFace deps
+    image: aegis-ml:latest
+    container_name: aegis-ml
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount trained models from host (so you don't have to rebuild the image)
+      - ./models:/app/models:ro
+      # Persist audit logs
+      - ./logs:/app/logs:rw
+      # Persist dataset
+      - ./data:/app/data:rw
+    environment:
+      # ── Classifier ──────────────────────────────────────────────────────────
+      CLASSIFIER_TYPE: ${CLASSIFIER_TYPE:-sklearn}
+      CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.70}
+      SKLEARN_MODEL_PATH: models/sklearn_classifier.joblib
+      HF_MODEL_PATH: models/hf_classifier
+
+      # ── Backend LLM ─────────────────────────────────────────────────────────
+      # Point to your llama.cpp server.
+      # On Linux/Mac host: use host.docker.internal (Docker Desktop)
+      # On Linux server:   use the host IP or bridge network IP
+      BACKEND_URL: ${BACKEND_URL:-http://host.docker.internal:8080/v1/chat/completions}
+      BACKEND_API_KEY: ${BACKEND_API_KEY:-}
+      BACKEND_TIMEOUT: ${BACKEND_TIMEOUT:-120.0}
+
+      # ── ROCm / AMD GPU ───────────────────────────────────────────────────────
+      # Enables gfx1101 (RDNA 3 / RX 7700 XT) kernel compatibility with
+      # PyTorch ROCm 6.x builds that don't natively target gfx1101.
+      # Safe to leave set on CPU-only deployments (variable is ignored).
+      HSA_OVERRIDE_GFX_VERSION: ${HSA_OVERRIDE_GFX_VERSION:-11.0.0}
+
+      # ── Service ──────────────────────────────────────────────────────────────
+      HOST: 0.0.0.0
+      PORT: 8000
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      REDACT_PROMPTS_IN_LOGS: ${REDACT_PROMPTS_IN_LOGS:-false}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
+      DATABASE_URL: sqlite+aiosqlite:///./logs/aegis_audit.db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    extra_hosts:
+      # Allow container to reach host.docker.internal on Linux
+      - "host.docker.internal:host-gateway"
+
+  # ── Gradio Demo UI ──────────────────────────────────────────────────────────
+  aegis-demo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aegis-ml:latest
+    container_name: aegis-demo
+    restart: unless-stopped
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./models:/app/models:ro
+    environment:
+      CLASSIFIER_TYPE: ${CLASSIFIER_TYPE:-sklearn}
+      SKLEARN_MODEL_PATH: models/sklearn_classifier.joblib
+      HF_MODEL_PATH: models/hf_classifier
+      CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.70}
+      DEMO_PORT: 7860
+      # Point demo at the running Aegis-ML API service
+      AEGIS_API_URL: http://aegis-ml:8000
+    command: ["python", "-m", "demo.gradio_ui"]
+    depends_on:
+      aegis-ml:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
