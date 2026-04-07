@@ -35,34 +35,30 @@ AEGIS_API_URL = os.getenv("AEGIS_API_URL", "http://localhost:8000")
 DEMO_PORT = int(os.getenv("DEMO_PORT", "7860"))
 CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.70"))
 
-# ── Demo mode classifier (loads sklearn model directly) ───────────────────────
+# ── Demo mode classifiers (lazy-loaded, cached per type) ─────────────────────
 
-_demo_classifier = None
+_classifiers: dict[str, object] = {}
 
 
-def _load_demo_classifier():
-    """Lazy-load the sklearn classifier for demo mode."""
-    global _demo_classifier
-    if _demo_classifier is not None:
-        return _demo_classifier
-
-    model_path = os.getenv("SKLEARN_MODEL_PATH", "models/sklearn_classifier.joblib")
-    classifier_type = os.getenv("CLASSIFIER_TYPE", "sklearn")
+def _load_classifier(classifier_type: str):
+    """Lazy-load and cache a classifier by type ('sklearn' or 'hf')."""
+    if classifier_type in _classifiers:
+        return _classifiers[classifier_type]
 
     try:
         if classifier_type == "sklearn":
             from app.classifiers.sklearn_classifier import SklearnClassifier
+            model_path = os.getenv("SKLEARN_MODEL_PATH", "models/sklearn_classifier.joblib")
             clf = SklearnClassifier(model_path=model_path)
             clf.load()
-            _demo_classifier = clf
         else:
             from app.classifiers.hf_classifier import HFClassifier
             hf_path = os.getenv("HF_MODEL_PATH", "models/hf_classifier")
             clf = HFClassifier(model_path=hf_path)
             clf.load()
-            _demo_classifier = clf
-        return _demo_classifier
-    except Exception as exc:
+        _classifiers[classifier_type] = clf
+        return clf
+    except Exception:
         return None
 
 
@@ -88,13 +84,12 @@ EXAMPLE_BENIGN = [
 # ── Core logic ────────────────────────────────────────────────────────────────
 
 
-async def _classify_locally(text: str) -> tuple[bool, float, str]:
+async def _classify_locally(text: str, classifier_type: str) -> tuple[bool, float, str]:
     """
     Run the classifier locally (demo mode).
     Returns (is_malicious, confidence, reason).
     """
-    import asyncio
-    clf = _load_demo_classifier()
+    clf = _load_classifier(classifier_type)
     if clf is None:
         # Fallback: simple keyword heuristic if model not trained yet
         keywords = [
@@ -118,6 +113,7 @@ async def chat_with_aegis(
     message: str,
     history: list[dict],
     mode: str,
+    classifier_type: str,
     show_details: bool,
 ) -> tuple[list[dict], str]:
     """
@@ -201,10 +197,11 @@ async def chat_with_aegis(
 
     # ── Mode: Demo (local classifier, simulated response) ─────────────────────
     else:
-        is_malicious, confidence, reason = await _classify_locally(message)
+        is_malicious, confidence, reason = await _classify_locally(message, classifier_type)
         elapsed_ms = (time.perf_counter() - t_start) * 1000
 
-        analysis_lines.append(f"**Mode:** Demo (local classifier)")
+        model_label = "DistilBERT (Phase 2)" if classifier_type == "hf" else "TF-IDF + LogReg (Phase 1)"
+        analysis_lines.append(f"**Model:** {model_label}")
         analysis_lines.append(
             f"**Verdict:** {'🚫 BLOCKED' if is_malicious else '✅ ALLOWED'}"
         )
@@ -267,7 +264,6 @@ def build_ui() -> gr.Blocks:
                     label="Chat",
                     height=500,
                     show_label=False,
-                    avatar_images=(None, "🛡️"),
                 )
 
                 with gr.Row():
@@ -293,6 +289,12 @@ def build_ui() -> gr.Blocks:
                         label="Mode",
                         info="Demo: local classifier only. API: full proxy pipeline.",
                     )
+                    classifier_selector = gr.Radio(
+                        choices=["hf", "sklearn"],
+                        value="hf",
+                        label="Classifier",
+                        info="hf = DistilBERT (Phase 2) · sklearn = TF-IDF + LogReg (Phase 1)",
+                    )
                     show_details = gr.Checkbox(
                         value=True,
                         label="Show guardrail analysis",
@@ -314,6 +316,7 @@ def build_ui() -> gr.Blocks:
                     inputs=msg_input,
                     label="",
                     examples_per_page=6,
+                    cache_examples=False,
                 )
             with gr.Column():
                 gr.Markdown("### ✅ Benign Examples — Should Pass")
@@ -322,6 +325,7 @@ def build_ui() -> gr.Blocks:
                     inputs=msg_input,
                     label="",
                     examples_per_page=5,
+                    cache_examples=False,
                 )
 
         # ── Architecture info ─────────────────────────────────────────────────
@@ -357,18 +361,18 @@ def build_ui() -> gr.Blocks:
             """)
 
         # ── Event handlers ────────────────────────────────────────────────────
-        async def handle_message(message, history, mode_val, show_det):
-            history, analysis = await chat_with_aegis(message, history, mode_val, show_det)
+        async def handle_message(message, history, mode_val, clf_type, show_det):
+            history, analysis = await chat_with_aegis(message, history, mode_val, clf_type, show_det)
             return history, analysis, ""
 
         send_btn.click(
             fn=handle_message,
-            inputs=[msg_input, chatbot, mode, show_details],
+            inputs=[msg_input, chatbot, mode, classifier_selector, show_details],
             outputs=[chatbot, analysis_output, msg_input],
         )
         msg_input.submit(
             fn=handle_message,
-            inputs=[msg_input, chatbot, mode, show_details],
+            inputs=[msg_input, chatbot, mode, classifier_selector, show_details],
             outputs=[chatbot, analysis_output, msg_input],
         )
         clear_btn.click(
