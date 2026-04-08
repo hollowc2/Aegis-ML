@@ -54,6 +54,21 @@ hf = [
 onnx = [
     "optimum[onnxruntime]>=1.23.0",
 ]
+# Phase 3 — HF2 multi-task model: includes onnxruntime for INT8 quantisation
+# AMD ROCm users: after install, replace onnxruntime with onnxruntime-rocm
+hf2 = [
+    "torch>=2.5.0,<2.11.0",
+    "transformers>=4.47.0,<5.0.0",
+    "peft>=0.14.0",
+    "bitsandbytes>=0.45.0",
+    "accelerate>=1.2.0",
+    "evaluate>=0.4.0",
+    "sentencepiece>=0.2.0",
+    "protobuf>=5.29.0",
+    "optimum[onnxruntime]>=1.23.0",
+    "onnxruntime>=1.20.0",
+    "scipy>=1.13.0",
+]
 # Development + testing
 dev = [
     "pytest>=8.3.0",
@@ -75,6 +90,9 @@ notebook = [
 [project.scripts]
 aegis-serve = "app.main:run"
 aegis-demo = "demo.gradio_ui:main"
+aegis-train-hf2 = "training.phase3_hf2.train:main"
+aegis-eval-hf2 = "training.phase3_hf2.evaluate:main"
+aegis-export-hf2 = "training.phase3_hf2.export_onnx:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app", "demo", "training"]

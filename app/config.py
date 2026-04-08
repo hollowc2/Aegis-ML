@@ -47,11 +47,13 @@ class Settings(BaseSettings):
     backend_timeout: float = Field(default=120.0, ge=1.0)
 
     # ── Classifier ───────────────────────────────────────────────────────────
-    classifier_type: Literal["sklearn", "hf", "onnx", "cascade"] = Field(
+    classifier_type: Literal["sklearn", "hf", "onnx", "cascade", "hf2", "onnx2", "cascade2"] = Field(
         default="sklearn",
         description=(
             "Which classifier to use: 'sklearn' (Phase 1), 'hf' (Phase 2), "
-            "'onnx' (Phase 2 via ONNX Runtime), or 'cascade' (sklearn fast path + ONNX slow path)"
+            "'onnx' (Phase 2 via ONNX Runtime), 'cascade' (sklearn + ONNX), "
+            "'hf2' (Phase 3 multi-task), 'onnx2' (Phase 3 ONNX INT8), "
+            "or 'cascade2' (sklearn fast path + ONNX2 slow path)"
         ),
     )
     confidence_threshold: float = Field(
@@ -73,6 +75,37 @@ class Settings(BaseSettings):
     onnx_model_path: str = Field(
         default="models/hf_classifier_onnx",
         description="Path to the ONNX-exported model directory (produced by export_onnx.py)",
+    )
+    # Phase 3 model paths
+    hf2_model_path: str = Field(
+        default="models/hf2_classifier",
+        description="Path to the Phase 3 multi-task HF2 model directory",
+    )
+    onnx2_model_path: str = Field(
+        default="models/hf2_classifier_onnx",
+        description="Path to the Phase 3 ONNX-exported HF2 model directory",
+    )
+    onnx2_use_int8: bool = Field(
+        default=True,
+        description="Use INT8-quantised ONNX model for onnx2/cascade2 (falls back to FP32 if absent)",
+    )
+
+    # ── Text Preprocessing ────────────────────────────────────────────────────
+    enable_text_preprocessing: bool = Field(
+        default=True,
+        description=(
+            "Enable Unicode normalization + invisible character detection "
+            "before classification (applies to all classifier types)"
+        ),
+    )
+    preprocess_invisible_char_bias: float = Field(
+        default=0.15,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Extra malicious_prob added when invisible/RTL-override chars are detected. "
+            "Set to 0.0 to disable the bias (e.g. for multilingual environments)."
+        ),
     )
 
     # ── Cascade Classifier ────────────────────────────────────────────────────

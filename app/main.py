@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
     logger.info("Classifier type : %s", settings.classifier_type)
     logger.info("Backend URL     : %s", settings.backend_url)
     logger.info("Threshold       : %.2f", settings.confidence_threshold)
-    if settings.classifier_type == "cascade":
+    if settings.classifier_type in ("cascade", "cascade2"):
         logger.info(
             "Cascade band    : sk_low=%.2f  sk_high=%.2f",
             settings.cascade_sk_low_threshold,
@@ -169,10 +169,81 @@ def _load_classifier(settings):
         )
         return clf
 
+    elif settings.classifier_type == "hf2":
+        from app.classifiers.hf2_classifier import HF2Classifier
+        clf = HF2Classifier(model_path=settings.hf2_model_path)
+        try:
+            clf.load()
+        except (FileNotFoundError, RuntimeError) as exc:
+            logger.warning(
+                "HF2 model not loaded (%s). "
+                "Run: python -m training.phase3_hf2.train",
+                exc,
+            )
+        return clf
+
+    elif settings.classifier_type == "onnx2":
+        from app.classifiers.onnx2_classifier import ONNX2Classifier
+        clf = ONNX2Classifier(
+            model_path=settings.onnx2_model_path,
+            use_int8=settings.onnx2_use_int8,
+        )
+        try:
+            clf.load()
+        except (FileNotFoundError, ImportError) as exc:
+            logger.warning(
+                "ONNX2 model not loaded (%s). "
+                "Run: python -m training.phase3_hf2.export_onnx",
+                exc,
+            )
+        return clf
+
+    elif settings.classifier_type == "cascade2":
+        from app.classifiers.sklearn_classifier import SklearnClassifier
+        from app.classifiers.onnx2_classifier import ONNX2Classifier
+        from app.classifiers.cascade_classifier import CascadeClassifier
+
+        sklearn_clf = SklearnClassifier(model_path=settings.sklearn_model_path)
+        onnx2_clf = ONNX2Classifier(
+            model_path=settings.onnx2_model_path,
+            use_int8=settings.onnx2_use_int8,
+        )
+
+        try:
+            sklearn_clf.load()
+        except FileNotFoundError as exc:
+            logger.warning(
+                "Cascade2: scikit-learn model not found (%s). "
+                "Run: python -m training.phase1_sklearn.train",
+                exc,
+            )
+        try:
+            onnx2_clf.load()
+        except (FileNotFoundError, ImportError) as exc:
+            logger.warning(
+                "Cascade2: ONNX2 model not loaded (%s). "
+                "Run: python -m training.phase3_hf2.export_onnx",
+                exc,
+            )
+
+        clf = CascadeClassifier(
+            sklearn_clf=sklearn_clf,
+            slow_clf=onnx2_clf,
+            low_threshold=settings.cascade_sk_low_threshold,
+            high_threshold=settings.cascade_sk_high_threshold,
+            slow_clf_label="onnx2",
+        )
+        logger.info(
+            "Cascade2 thresholds: sk_low=%.2f  sk_high=%.2f",
+            settings.cascade_sk_low_threshold,
+            settings.cascade_sk_high_threshold,
+        )
+        return clf
+
     else:
         raise ValueError(
             f"Unknown CLASSIFIER_TYPE: {settings.classifier_type!r}. "
-            "Must be 'sklearn', 'hf', 'onnx', or 'cascade'."
+            "Must be one of: 'sklearn', 'hf', 'onnx', 'cascade', 'hf2', 'onnx2', 'cascade2'."
         )
 
 

@@ -127,6 +127,8 @@ class InputGuardrailResult(BaseModel):
     reason: str = ""
     # Raw per-class probabilities (for logging / debugging)
     probabilities: dict[str, float] = Field(default_factory=dict)
+    # Phase 3: ML-learned threat category probabilities (hf2/onnx2 only; empty for Phase 1/2)
+    threat_category_probs: dict[str, float] = Field(default_factory=dict)
 
 
 class OutputGuardrailResult(BaseModel):
@@ -161,6 +163,8 @@ class AuditEntry(BaseModel):
     output_threat: str = "none"
     # Timing
     latency_ms: float = 0.0
+    # Phase 3: JSON-serialised preprocessing metadata (invisible chars, RTL override, etc.)
+    preprocessing_flags: str = ""
 
 
 # ─────────────────────────────────────────────────────────────────────────────

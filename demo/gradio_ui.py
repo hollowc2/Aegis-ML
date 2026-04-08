@@ -360,28 +360,29 @@ def build_ui() -> gr.Blocks:
                     )
 
         # ── Examples tabs ─────────────────────────────────────────────────────
-        with gr.Row():
-            with gr.Column():
-                gr.Markdown("### 🚨 Attack Examples — Try These!")
-                gr.Examples(
-                    examples=EXAMPLE_ATTACKS,
-                    inputs=msg_input,
-                    label="",
-                    examples_per_page=6,
-                    cache_examples=False,
-                )
-            with gr.Column():
-                gr.Markdown("### ✅ Benign Examples — Should Pass")
-                gr.Examples(
-                    examples=EXAMPLE_BENIGN,
-                    inputs=msg_input,
-                    label="",
-                    examples_per_page=5,
-                    cache_examples=False,
-                )
+        with gr.Accordion("🚨 Attack & Benign Examples — Try These!", open=True):
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("### 🚨 Attack Examples")
+                    gr.Examples(
+                        examples=EXAMPLE_ATTACKS,
+                        inputs=msg_input,
+                        label="",
+                        examples_per_page=6,
+                        cache_examples=False,
+                    )
+                with gr.Column():
+                    gr.Markdown("### ✅ Benign Examples — Should Pass")
+                    gr.Examples(
+                        examples=EXAMPLE_BENIGN,
+                        inputs=msg_input,
+                        label="",
+                        examples_per_page=5,
+                        cache_examples=False,
+                    )
 
         # ── Evasive Threats ───────────────────────────────────────────────────
-        with gr.Accordion("⚠️ Evasive Threats — Bypass sklearn, caught by HF", open=True):
+        with gr.Accordion("⚠️ Evasive Threats — Bypass sklearn, caught by HF", open=False):
             gr.Markdown(
                 "These 31 prompts scored **below 0.70** on the TF-IDF classifier (Phase 1) "
                 "but were correctly flagged by fine-tuned DistilBERT (Phase 2). "

@@ -5,7 +5,10 @@ Downloads and combines public prompt-injection datasets from HuggingFace Hub,
 then merges them with locally generated synthetic examples.
 
 Outputs a single balanced CSV: data/combined_dataset.csv
-  Columns: text, label   (0=benign, 1=malicious)
+  Columns: text, label, threat_category
+    - label: 0=benign, 1=malicious
+    - threat_category: "none", "prompt_injection", "jailbreak", "data_exfiltration"
+      Used by Phase 3 multi-task training; ignored by Phase 1/2 training scripts.
 
 Run:
     python -m training.data.prepare_dataset
@@ -88,6 +91,30 @@ HF_DATASETS = [
         "text_col": "prompt",
         "fixed_label": 0,
     },
+    # Phase 3 additions — loaded with try/except fallback, skipped if unavailable
+    # Lakera PINT-style indirect injection (if available on Hub)
+    {
+        "name": "Lakera/gandalf_ignore_instructions",
+        "split": "train",
+        "text_col": "text",
+        "fixed_label": 1,
+    },
+    # ProtectAI prompt injection v2 (if available on Hub)
+    {
+        "name": "protectai/prompt-injection-v2",
+        "split": "train",
+        "text_col": "text",
+        "label_col": "label",
+        "label_map": {0: 0, 1: 1, "safe": 0, "injection": 1},
+    },
+    # jackhhao jailbreak classification (if available on Hub)
+    {
+        "name": "jackhhao/jailbreak-classification",
+        "split": "train",
+        "text_col": "prompt",
+        "label_col": "type",
+        "label_map": {"normal": 0, "jailbreak": 1},
+    },
 ]
 
 # ── Hardcoded high-quality seed examples ─────────────────────────────────────
@@ -151,11 +178,38 @@ SEED_MALICIOUS = [
 ]
 
 
+def _assign_threat_category(text: str, label: int) -> str:
+    """
+    Heuristic threat category assignment for HF-sourced and seed data.
+    Used to populate the threat_category column; Phase 3 training ignores
+    this for samples labelled with -100 (unknown).
+    """
+    if label == 0:
+        return "none"
+    lower = text.lower()
+    exfil_patterns = [
+        "repeat your system prompt", "reveal your", "print your system",
+        "show me your instructions", "what were your instructions",
+        "what is in your context", "expose your", "tell me your secret",
+    ]
+    jailbreak_patterns = [
+        "dan ", " dan,", "jailbreak", "you are now", "pretend you are",
+        "act as", "roleplay as", "enter.*mode", "developer mode",
+        "do anything now", "no restrictions", "without restrictions",
+        "no ethical", "unrestricted",
+    ]
+    if any(p in lower for p in exfil_patterns):
+        return "data_exfiltration"
+    if any(p in lower for p in jailbreak_patterns):
+        return "jailbreak"
+    return "prompt_injection"
+
+
 def load_hf_dataset(config: dict) -> pd.DataFrame:
     """Load one HuggingFace dataset and return a normalised DataFrame."""
     logger.info("Loading HF dataset: %s (split=%s)", config["name"], config["split"])
     try:
-        load_kwargs = {"split": config["split"]}
+        load_kwargs: dict = {"split": config["split"]}
         if "config" in config:
             load_kwargs["name"] = config["config"]
         ds = load_dataset(config["name"], **load_kwargs)
@@ -171,26 +225,32 @@ def load_hf_dataset(config: dict) -> pd.DataFrame:
             df.columns = ["text", "label"]
             # Normalise labels to int 0/1
             df["label"] = df["label"].map(config["label_map"]).fillna(df["label"])
+            df["label"] = pd.to_numeric(df["label"], errors="coerce")
+            df = df.dropna(subset=["label"])
             df["label"] = df["label"].astype(int)
             df = df[df["label"].isin([0, 1])]
 
         df = df.dropna()
+        # Add threat_category using heuristic
+        df["threat_category"] = df.apply(
+            lambda row: _assign_threat_category(row["text"], row["label"]), axis=1
+        )
         logger.info("  → loaded %d samples (benign=%d  malicious=%d)",
                     len(df), (df["label"] == 0).sum(), (df["label"] == 1).sum())
         return df
     except Exception as exc:
         logger.warning("Failed to load %s: %s — skipping.", config["name"], exc)
-        return pd.DataFrame(columns=["text", "label"])
+        return pd.DataFrame(columns=["text", "label", "threat_category"])
 
 
-def build_dataset(n_synthetic: int = 500) -> pd.DataFrame:
+def build_dataset(n_synthetic: int = 2000) -> pd.DataFrame:
     """
     Assemble the full combined dataset:
       - HuggingFace public datasets
       - Hardcoded seed examples
-      - Synthetic examples (generated locally)
+      - Synthetic examples (generated locally, includes Phase 3 attack types)
 
-    Returns a balanced, shuffled DataFrame.
+    Returns a balanced, shuffled DataFrame with columns: text, label, threat_category.
     """
     frames: list[pd.DataFrame] = []
 
@@ -200,12 +260,15 @@ def build_dataset(n_synthetic: int = 500) -> pd.DataFrame:
 
     # ── Seed examples ──────────────────────────────────────────────────────────
     seed_rows = (
-        [{"text": t, "label": 0} for t in SEED_BENIGN]
-        + [{"text": t, "label": 1} for t in SEED_MALICIOUS]
+        [{"text": t, "label": 0, "threat_category": "none"} for t in SEED_BENIGN]
+        + [
+            {"text": t, "label": 1, "threat_category": _assign_threat_category(t, 1)}
+            for t in SEED_MALICIOUS
+        ]
     )
     frames.append(pd.DataFrame(seed_rows))
 
-    # ── Synthetic examples ─────────────────────────────────────────────────────
+    # ── Synthetic examples (Phase 1/2/3 coverage) ─────────────────────────────
     logger.info("Generating %d synthetic examples...", n_synthetic)
     synthetic = generate_synthetic_examples(n=n_synthetic)
     frames.append(pd.DataFrame(synthetic))
@@ -215,6 +278,13 @@ def build_dataset(n_synthetic: int = 500) -> pd.DataFrame:
     combined = combined.dropna(subset=["text", "label"])
     combined["text"] = combined["text"].astype(str).str.strip()
     combined = combined[combined["text"].str.len() > 5]
+    # Fill missing threat_category (e.g. from older HF sources without the column)
+    if "threat_category" not in combined.columns:
+        combined["threat_category"] = combined["label"].map({0: "none", 1: "prompt_injection"})
+    else:
+        combined["threat_category"] = combined["threat_category"].fillna(
+            combined["label"].map({0: "none", 1: "prompt_injection"})
+        )
 
     benign = combined[combined["label"] == 0]
     malicious = combined[combined["label"] == 1]
@@ -236,13 +306,15 @@ def build_dataset(n_synthetic: int = 500) -> pd.DataFrame:
 
 def main() -> None:
     DATA_DIR.mkdir(exist_ok=True)
-    df = build_dataset(n_synthetic=1000)
+    df = build_dataset(n_synthetic=2000)
     df.to_csv(OUTPUT_CSV, index=False)
     logger.info("Dataset saved to %s", OUTPUT_CSV)
 
     # Print a quick sanity check
     print("\nDataset summary:")
     print(df["label"].value_counts().rename({0: "benign", 1: "malicious"}))
+    print("\nThreat category distribution:")
+    print(df["threat_category"].value_counts().to_string())
     print("\nSample malicious:")
     print(df[df["label"] == 1]["text"].head(3).to_string())
     print("\nSample benign:")

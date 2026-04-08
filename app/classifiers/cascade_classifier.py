@@ -53,11 +53,13 @@ class CascadeClassifier:
         slow_clf,
         low_threshold: float = 0.05,
         high_threshold: float = 0.95,
+        slow_clf_label: str = "onnx",
     ) -> None:
         self.sklearn_clf = sklearn_clf
         self.slow_clf = slow_clf
         self.low_threshold = low_threshold
         self.high_threshold = high_threshold
+        self.slow_clf_label = slow_clf_label
 
     def is_loaded(self) -> bool:
         return self.sklearn_clf.is_loaded() and self.slow_clf.is_loaded()
@@ -107,4 +109,4 @@ class CascadeClassifier:
             self.high_threshold,
         )
         slow_result = await self.slow_clf.predict(text)
-        return {**slow_result, "stage": "onnx"}
+        return {**slow_result, "stage": self.slow_clf_label}
