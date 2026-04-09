@@ -7,7 +7,7 @@ name = "aegis-ml"
 version = "1.0.0"
 description = "Adversarial Prompt Injection Detector Microservice — LLM Firewall / Guardrails Service"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 license = { text = "MIT" }
 authors = [{ name = "Aegis-ML" }]
 keywords = ["llm", "security", "guardrails", "prompt-injection", "firewall"]
@@ -40,7 +40,8 @@ dependencies = [
 [project.optional-dependencies]
 # Phase 2 — HF fine-tuning (heavier, GPU required)
 hf = [
-    "torch>=2.5.0,<2.11.0",
+    "torch>=2.5.0,<2.12.0",
+    "triton-rocm>=3.6.0; sys_platform == 'linux'",
     "transformers>=4.47.0,<5.0.0",
     "peft>=0.14.0",
     "bitsandbytes>=0.45.0",
@@ -57,7 +58,8 @@ onnx = [
 # Phase 3 — HF2 multi-task model: includes onnxruntime for INT8 quantisation
 # AMD ROCm users: after install, replace onnxruntime with onnxruntime-rocm
 hf2 = [
-    "torch>=2.5.0,<2.11.0",
+    "torch>=2.5.0,<2.12.0",
+    "triton-rocm>=3.6.0; sys_platform == 'linux'",
     "transformers>=4.47.0,<5.0.0",
     "peft>=0.14.0",
     "bitsandbytes>=0.45.0",
@@ -110,4 +112,16 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+# ── AMD ROCm GPU support ───────────────────────────────────────────────────────
+# Pulls torch from the ROCm 7.2 index instead of the default CUDA wheel on PyPI.
+# RX 7700 XT (gfx1101) also requires: HSA_OVERRIDE_GFX_VERSION=11.0.0
+[[tool.uv.index]]
+name = "pytorch-rocm72"
+url = "https://download.pytorch.org/whl/rocm7.2"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-rocm72" }]
+triton-rocm = [{ index = "pytorch-rocm72" }]
 

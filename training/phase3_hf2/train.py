@@ -172,16 +172,20 @@ class AegisMTTrainer(Trainer):
     """
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+        import torch.nn.functional as F
         binary_labels = inputs.pop("labels")
         threat_labels = inputs.pop("threat_labels", None)
-        outputs = model(
-            **inputs,
-            binary_labels=binary_labels,
-            threat_labels=threat_labels,
-        )
-        loss = outputs.loss
-        # Return (loss, binary_logits) so Trainer's eval loop gets the right logits
-        return (loss, outputs.binary_logits) if return_outputs else loss
+        outputs = model(**inputs)
+        binary_logits = outputs.binary_logits
+        threat_logits = outputs.threat_logits
+
+        binary_loss = F.cross_entropy(binary_logits, binary_labels, label_smoothing=0.1)
+        threat_loss = torch.tensor(0.0, device=binary_logits.device)
+        if threat_labels is not None:
+            threat_loss = F.cross_entropy(threat_logits, threat_labels, ignore_index=-100)
+        loss = binary_loss + 0.3 * threat_loss
+
+        return (loss, binary_logits) if return_outputs else loss
 
     def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
         inputs = self._prepare_inputs(inputs)
@@ -284,18 +288,28 @@ def augment_hard_negatives(train_df: pd.DataFrame) -> pd.DataFrame:
 def train(
     model_key: str = "deberta-base",
     num_epochs: int = 12,
-    batch_size: int = 16,
+    batch_size: int = 8,
     learning_rate: float = 1e-5,
     max_length: int = 512,
     use_adversarial_training: bool = False,
+    num_workers: int = 2,
+    resume: bool = False,
 ) -> None:
     MODELS_DIR.mkdir(exist_ok=True)
+
+    # Cap PyTorch intra-op threads to leave CPU headroom for the OS.
+    n_cpu = os.cpu_count() or 4
+    torch_threads = max(2, n_cpu - 2)
+    torch.set_num_threads(torch_threads)
+    torch.set_num_interop_threads(max(1, torch_threads // 2))
 
     base_model_name = MODEL_NAMES[model_key]
     logger.info("Phase 3 HF2 training")
     logger.info("Base model      : %s", base_model_name)
     logger.info("Epochs          : %d", num_epochs)
-    logger.info("Batch size      : %d (eff. %d with grad. accum. × 8)", batch_size, batch_size * 8)
+    logger.info("Batch size      : %d (eff. %d with grad. accum. × 16)", batch_size, batch_size * 16)
+    logger.info("Dataloader workers: %d", num_workers)
+    logger.info("PyTorch threads : %d intra / %d inter", torch_threads, max(1, torch_threads // 2))
     logger.info("Adversarial aug : %s", use_adversarial_training)
 
     # ── Load dataset ──────────────────────────────────────────────────────────
@@ -306,7 +320,7 @@ def train(
     )
 
     # ── Resolve local snapshot ────────────────────────────────────────────────
-    local_model_path = snapshot_download(base_model_name, local_files_only=True)
+    local_model_path = snapshot_download(base_model_name, local_files_only=False)
 
     # ── Tokeniser ─────────────────────────────────────────────────────────────
     tokenizer = AutoTokenizer.from_pretrained(local_model_path)
@@ -361,8 +375,10 @@ def train(
         max_grad_norm=1.0,
         report_to="none",
         dataloader_pin_memory=False,
-        dataloader_num_workers=4,
-        gradient_accumulation_steps=8,  # effective batch = 128
+        dataloader_num_workers=num_workers,
+        gradient_accumulation_steps=16,  # effective batch = 128 (batch_size 8 × 16)
+        gradient_checkpointing=True,     # trade compute for VRAM (needed on 12 GB with fp32)
+        gradient_checkpointing_kwargs={"use_reentrant": False},  # DeBERTa disentangled attn incompatible with reentrant GC
         label_smoothing_factor=0.0,     # label smoothing is handled inside the model loss
         remove_unused_columns=False,    # keep threat_labels column
     )
@@ -379,7 +395,7 @@ def train(
     )
 
     logger.info("Starting Phase 3 main training...")
-    trainer.train()
+    trainer.train(resume_from_checkpoint=True if resume else None)
 
     # ── Optional adversarial fine-tuning pass ─────────────────────────────────
     if use_adversarial_training:
@@ -410,7 +426,8 @@ def train(
             bf16=False,
             report_to="none",
             dataloader_pin_memory=False,
-            gradient_accumulation_steps=8,
+            dataloader_num_workers=num_workers,
+            gradient_accumulation_steps=16,
             remove_unused_columns=False,
         )
         adv_trainer = AegisMTTrainer(
@@ -453,7 +470,7 @@ def main() -> None:
         help="Base model to fine-tune (default: deberta-base)",
     )
     parser.add_argument("--epochs", type=int, default=12)
-    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument(
         "--max-length",
@@ -466,6 +483,17 @@ def main() -> None:
         action="store_true",
         help="Run a 2-epoch adversarial augmentation pass after main training",
     )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from the latest checkpoint in the output directory",
+    )
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=2,
+        help="Dataloader worker processes (default: 2; use 0 to disable multiprocessing)",
+    )
     args = parser.parse_args()
 
     train(
@@ -475,6 +503,8 @@ def main() -> None:
         learning_rate=args.lr,
         max_length=args.max_length,
         use_adversarial_training=args.adversarial_training,
+        num_workers=args.num_workers,
+        resume=args.resume,
     )
 
 

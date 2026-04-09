@@ -245,13 +245,19 @@ class _AegisMTModule:
                 self.binary_head = nn.Linear(hidden, 2)
                 self.threat_head = nn.Linear(hidden, n_threat_classes)
 
+            def gradient_checkpointing_enable(self, gradient_checkpointing_kwargs=None):
+                self.deberta.gradient_checkpointing_enable(
+                    gradient_checkpointing_kwargs=gradient_checkpointing_kwargs or {}
+                )
+
+            def gradient_checkpointing_disable(self):
+                self.deberta.gradient_checkpointing_disable()
+
             def forward(
                 self,
                 input_ids,
                 attention_mask,
                 token_type_ids=None,
-                binary_labels=None,
-                threat_labels=None,
             ):
                 outputs = self.deberta(
                     input_ids=input_ids,
@@ -263,26 +269,8 @@ class _AegisMTModule:
                 binary_logits = self.binary_head(cls_rep)
                 threat_logits = self.threat_head(cls_rep)
 
-                loss = None
-                if binary_labels is not None:
-                    import torch.nn.functional as F
-                    binary_loss = F.cross_entropy(
-                        binary_logits,
-                        binary_labels,
-                        label_smoothing=0.1,
-                    )
-                    threat_loss = torch.tensor(0.0, device=binary_logits.device)
-                    if threat_labels is not None:
-                        # ignore_index=-100 skips samples with unknown category
-                        threat_loss = F.cross_entropy(
-                            threat_logits,
-                            threat_labels,
-                            ignore_index=-100,
-                        )
-                    loss = binary_loss + THREAT_LOSS_ALPHA * threat_loss
-
                 return _ForwardOutput(
-                    loss=loss,
+                    loss=None,
                     binary_logits=binary_logits,
                     threat_logits=threat_logits,
                 )
