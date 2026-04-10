@@ -34,6 +34,8 @@ models/*.joblib
 models/*.pkl
 models/hf_classifier*/
 models/hf_classifier_onnx*/
+models/hf2_classifier*/
+models/hf2_classifier_onnx*/
 models/*.bin
 models/*.safetensors
 !models/.gitkeep

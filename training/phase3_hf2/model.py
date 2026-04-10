@@ -135,6 +135,7 @@ class AegisMTModel:
         base_config = self._module.deberta.config.to_dict()
         base_config.update({
             "model_type": "aegis_mt",
+            "aegis_base_model": self.base_model_name_or_path,
             "aegis_n_threat_classes": self.n_threat_classes,
             "aegis_threat2id": THREAT2ID,
             "aegis_id2threat": {str(k): v for k, v in ID2THREAT.items()},
@@ -182,17 +183,20 @@ class AegisMTModel:
         n_threat = cfg.get("aegis_n_threat_classes", len(THREAT_CATEGORIES))
         dropout = cfg.get("dropout", 0.1)
         temperature = float(cfg.get("temperature_scaling", DEFAULT_TEMPERATURE))
+        # Use the saved base model name so AutoModel resolves from HF cache,
+        # not the saved dir (which has model_type="aegis_mt" and would fail).
+        base_model = cfg.get("aegis_base_model", "microsoft/deberta-v3-base")
 
         wrapper = cls(
-            base_model_name_or_path=str(model_dir),
+            base_model_name_or_path=base_model,
             dropout=dropout,
             n_threat_classes=n_threat,
         )
         module = _AegisMTModule(
-            base_model_name_or_path=str(model_dir),
+            base_model_name_or_path=base_model,
             dropout=dropout,
             n_threat_classes=n_threat,
-            load_base_weights=True,  # load DeBERTa weights from saved dir
+            load_base_weights=True,
         )
 
         state = torch.load(str(weights_file), map_location="cpu", weights_only=True)

@@ -41,21 +41,29 @@ _classifiers: dict[str, object] = {}
 
 
 def _load_classifier(classifier_type: str):
-    """Lazy-load and cache a classifier by type ('sklearn' or 'hf')."""
+    """Lazy-load and cache a classifier by type."""
     if classifier_type in _classifiers:
         return _classifiers[classifier_type]
 
     try:
         if classifier_type == "sklearn":
             from app.classifiers.sklearn_classifier import SklearnClassifier
-            model_path = os.getenv("SKLEARN_MODEL_PATH", "models/sklearn_classifier.joblib")
-            clf = SklearnClassifier(model_path=model_path)
+            clf = SklearnClassifier(model_path=os.getenv("SKLEARN_MODEL_PATH", "models/sklearn_classifier.joblib"))
+            clf.load()
+        elif classifier_type == "hf":
+            from app.classifiers.hf_classifier import HFClassifier
+            clf = HFClassifier(model_path=os.getenv("HF_MODEL_PATH", "models/hf_classifier"))
+            clf.load()
+        elif classifier_type == "hf2":
+            from app.classifiers.hf2_classifier import HF2Classifier
+            clf = HF2Classifier(model_path=os.getenv("HF2_MODEL_PATH", "models/hf2_classifier"))
+            clf.load()
+        elif classifier_type == "onnx2":
+            from app.classifiers.onnx2_classifier import ONNX2Classifier
+            clf = ONNX2Classifier(model_path=os.getenv("ONNX2_MODEL_PATH", "models/hf2_classifier_onnx"))
             clf.load()
         else:
-            from app.classifiers.hf_classifier import HFClassifier
-            hf_path = os.getenv("HF_MODEL_PATH", "models/hf_classifier")
-            clf = HFClassifier(model_path=hf_path)
-            clf.load()
+            return None
         _classifiers[classifier_type] = clf
         return clf
     except Exception:
@@ -200,7 +208,12 @@ async def chat_with_aegis(
         is_malicious, confidence, reason = await _classify_locally(message, classifier_type)
         elapsed_ms = (time.perf_counter() - t_start) * 1000
 
-        model_label = "DistilBERT (Phase 2)" if classifier_type == "hf" else "TF-IDF + LogReg (Phase 1)"
+        model_label = {
+            "sklearn": "TF-IDF + LogReg (Phase 1)",
+            "hf":      "DistilBERT/DeBERTa (Phase 2)",
+            "hf2":     "DeBERTa-v3 Multi-Task (Phase 3)",
+            "onnx2":   "DeBERTa-v3 Multi-Task ONNX (Phase 3)",
+        }.get(classifier_type, classifier_type)
         analysis_lines.append(f"**Model:** {model_label}")
         analysis_lines.append(
             f"**Verdict:** {'🚫 BLOCKED' if is_malicious else '✅ ALLOWED'}"
@@ -303,8 +316,8 @@ def build_ui() -> gr.Blocks:
                 Adversarial Prompt Injection Detector — LLM Firewall
             </p>
             <p style="font-size: 0.85em; color: #94a3b8;">
-                Real-time guardrails powered by TF-IDF + Logistic Regression (Phase 1)
-                or fine-tuned DistilBERT (Phase 2)
+                Real-time guardrails powered by TF-IDF + LogReg (Phase 1),
+                fine-tuned DistilBERT (Phase 2), or multi-task DeBERTa-v3 (Phase 3)
             </p>
         </div>
         """)
@@ -342,10 +355,10 @@ def build_ui() -> gr.Blocks:
                         info="Demo: local classifier only. API: full proxy pipeline.",
                     )
                     classifier_selector = gr.Radio(
-                        choices=["hf", "sklearn"],
-                        value="hf",
+                        choices=["hf2", "hf", "sklearn", "onnx2"],
+                        value="hf2",
                         label="Classifier",
-                        info="hf = DistilBERT (Phase 2) · sklearn = TF-IDF + LogReg (Phase 1)",
+                        info="hf2 = DeBERTa Multi-Task (Phase 3) · hf = DistilBERT (Phase 2) · sklearn = TF-IDF (Phase 1) · onnx2 = Phase 3 ONNX",
                     )
                     show_details = gr.Checkbox(
                         value=True,
@@ -382,12 +395,13 @@ def build_ui() -> gr.Blocks:
                     )
 
         # ── Evasive Threats ───────────────────────────────────────────────────
-        with gr.Accordion("⚠️ Evasive Threats — Bypass sklearn, caught by HF", open=False):
+        with gr.Accordion("⚠️ Evasive Threats — Bypass sklearn, caught by HF/HF2", open=False):
             gr.Markdown(
                 "These 31 prompts scored **below 0.70** on the TF-IDF classifier (Phase 1) "
-                "but were correctly flagged by fine-tuned DistilBERT (Phase 2). "
+                "but were correctly flagged by fine-tuned DistilBERT (Phase 2) and "
+                "multi-task DeBERTa-v3 (Phase 3). "
                 "Click any example to load it into the message field — switch the classifier "
-                "to **sklearn** vs **hf** to see the difference live."
+                "between **sklearn**, **hf**, and **hf2** to see the difference live."
             )
             with gr.Tabs():
                 with gr.Tab("Unicode Homoglyph (10)"):
@@ -415,8 +429,9 @@ def build_ui() -> gr.Blocks:
             Client Request
                 ↓
             [1] Input Guardrail
-                • Phase 1: TF-IDF + Logistic Regression
-                • Phase 2: Fine-tuned DistilBERT / DeBERTa-v3-small
+                • Phase 1: TF-IDF + Logistic Regression (sklearn)
+                • Phase 2: Fine-tuned DistilBERT / DeBERTa-v3-small (hf)
+                • Phase 3: Multi-task DeBERTa-v3, 15 categories (hf2 / onnx2)
                 ↓ (blocked if malicious — 403 Forbidden)
             [2] Canary Token Injection
                 • Random unique token embedded in system prompt

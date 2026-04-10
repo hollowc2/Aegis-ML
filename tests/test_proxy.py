@@ -73,14 +73,8 @@ class TestHealthEndpoint:
     def test_health_returns_ok_when_loaded(self, mock_classifier):
         app = create_app()
 
-        with patch.object(app, "state") as mock_state:
-            mock_state.classifier = mock_classifier
-            mock_state.http_client = MagicMock()
-            mock_state.limiter = MagicMock()
-
+        with patch("app.main._load_classifier", return_value=mock_classifier):
             with TestClient(app) as client:
-                # Override state after lifespan
-                app.state.classifier = mock_classifier
                 resp = client.get("/health")
                 # Either 200 ok or 200 degraded (depends on model loaded state)
                 assert resp.status_code == 200
@@ -167,13 +161,14 @@ class TestChatCompletionsAllowed:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestMetricsEndpoint:
-    def test_metrics_returns_prometheus_format(self):
+    def test_metrics_returns_prometheus_format(self, mock_classifier):
         app = create_app()
-        with TestClient(app) as client:
-            resp = client.get("/metrics")
-            assert resp.status_code == 200
-            # Prometheus format check
-            assert "aegis_" in resp.text or "python_" in resp.text
+        with patch("app.main._load_classifier", return_value=mock_classifier):
+            with TestClient(app) as client:
+                resp = client.get("/metrics")
+                assert resp.status_code == 200
+                # Prometheus format check
+                assert "aegis_" in resp.text or "python_" in resp.text
 
 
 # ─────────────────────────────────────────────────────────────────────────────

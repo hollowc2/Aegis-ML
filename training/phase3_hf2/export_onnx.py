@@ -91,6 +91,7 @@ def export_fp32(model_dir: Path, output_dir: Path) -> None:
             return out.binary_logits, out.threat_logits
 
     wrapper = _OnnxWrapper(module)
+    wrapper.eval()
 
     onnx_path = output_dir / "model.onnx"
     torch.onnx.export(
@@ -118,6 +119,7 @@ def export_fp32(model_dir: Path, output_dir: Path) -> None:
 def quantise_int8(fp32_path: Path, int8_path: Path) -> None:
     """Apply dynamic INT8 quantisation (weight-only) to the FP32 ONNX model."""
     try:
+        import onnx
         from onnxruntime.quantization import quantize_dynamic, QuantType
     except ImportError:
         logger.error(
@@ -127,13 +129,33 @@ def quantise_int8(fp32_path: Path, int8_path: Path) -> None:
         return
 
     logger.info("Applying dynamic INT8 quantisation: %s → %s", fp32_path, int8_path)
-    quantize_dynamic(
-        model_input=str(fp32_path),
-        model_output=str(int8_path),
-        weight_type=QuantType.QInt8,
-        per_channel=False,
-        reduce_range=False,
+
+    # The torch dynamo ONNX exporter embeds stale intermediate shape annotations
+    # in value_info that conflict with onnxruntime's internal shape-inference pass
+    # during quantisation.  Strip them so inference starts from scratch.
+    model = onnx.load(str(fp32_path), load_external_data=True)
+    del model.graph.value_info[:]
+    clean_path = fp32_path.with_name("_quant_input.onnx")
+    onnx.save_model(
+        model,
+        str(clean_path),
+        save_as_external_data=True,
+        all_tensors_to_one_file=True,
+        location="_quant_input.onnx.data",
     )
+    del model
+
+    try:
+        quantize_dynamic(
+            model_input=str(clean_path),
+            model_output=str(int8_path),
+            weight_type=QuantType.QInt8,
+            per_channel=False,
+            reduce_range=False,
+        )
+    finally:
+        clean_path.unlink(missing_ok=True)
+        (fp32_path.parent / "_quant_input.onnx.data").unlink(missing_ok=True)
     size_fp32 = fp32_path.stat().st_size / 1e6
     size_int8 = int8_path.stat().st_size / 1e6
     logger.info(
@@ -206,10 +228,12 @@ def main() -> None:
     parser.add_argument("--model-dir", type=Path, default=HF2_MODEL_DIR)
     parser.add_argument("--output-dir", type=Path, default=ONNX_OUTPUT_DIR)
     parser.add_argument("--no-int8", action="store_true", help="Skip INT8 quantisation")
+    parser.add_argument("--skip-fp32", action="store_true", help="Skip FP32 export (use existing model.onnx)")
     parser.add_argument("--validate", action="store_true", help="Validate INT8 accuracy delta")
     args = parser.parse_args()
 
-    export_fp32(args.model_dir, args.output_dir)
+    if not args.skip_fp32:
+        export_fp32(args.model_dir, args.output_dir)
 
     if not args.no_int8:
         int8_path = args.output_dir / "model_int8.onnx"

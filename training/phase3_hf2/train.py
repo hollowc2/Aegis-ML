@@ -254,7 +254,6 @@ def augment_hard_negatives(train_df: pd.DataFrame) -> pd.DataFrame:
         _gen_many_shot_jailbreak,
         _gen_multilingual_evasion,
         _gen_sycophantic_setup,
-        THREAT2ID as _T2I,
     )
     import random
 
@@ -294,6 +293,7 @@ def train(
     use_adversarial_training: bool = False,
     num_workers: int = 2,
     resume: bool = False,
+    adversarial_only: bool = False,
 ) -> None:
     MODELS_DIR.mkdir(exist_ok=True)
 
@@ -310,7 +310,7 @@ def train(
     logger.info("Batch size      : %d (eff. %d with grad. accum. × 16)", batch_size, batch_size * 16)
     logger.info("Dataloader workers: %d", num_workers)
     logger.info("PyTorch threads : %d intra / %d inter", torch_threads, max(1, torch_threads // 2))
-    logger.info("Adversarial aug : %s", use_adversarial_training)
+    logger.info("Adversarial aug : %s", use_adversarial_training or adversarial_only)
 
     # ── Load dataset ──────────────────────────────────────────────────────────
     dataset = load_data()
@@ -319,11 +319,24 @@ def train(
         len(dataset["train"]), len(dataset["validation"]), len(dataset["test"]),
     )
 
-    # ── Resolve local snapshot ────────────────────────────────────────────────
-    local_model_path = snapshot_download(base_model_name, local_files_only=False)
+    # ── Resolve tokeniser source ──────────────────────────────────────────────
+    if adversarial_only:
+        if not (HF2_MODEL_OUTPUT / "model.pt").exists():
+            raise FileNotFoundError(
+                f"No saved model found at {HF2_MODEL_OUTPUT}. "
+                "Run full training first before using --adversarial-only."
+            )
+        logger.info("--adversarial-only: loading saved model from %s", HF2_MODEL_OUTPUT)
+        aegis_model, _ = AegisMTModel.from_pretrained(HF2_MODEL_OUTPUT)
+        model = aegis_model._module
+        tokenizer = AutoTokenizer.from_pretrained(str(HF2_MODEL_OUTPUT))
+    else:
+        local_model_path = snapshot_download(base_model_name, local_files_only=False)
+        tokenizer = AutoTokenizer.from_pretrained(local_model_path)
+        aegis_model = AegisMTModel(base_model_name_or_path=local_model_path)
+        model = aegis_model.build()
 
     # ── Tokeniser ─────────────────────────────────────────────────────────────
-    tokenizer = AutoTokenizer.from_pretrained(local_model_path)
     tokenize_fn = get_tokenize_fn(tokenizer, max_length=max_length)
 
     tokenised = dataset.map(tokenize_fn, batched=True, remove_columns=["text"])
@@ -333,10 +346,6 @@ def train(
     tokenised.set_format("torch")
 
     collator = DataCollatorWithPadding(tokenizer=tokenizer)
-
-    # ── Build model ───────────────────────────────────────────────────────────
-    aegis_model = AegisMTModel(base_model_name_or_path=local_model_path)
-    model = aegis_model.build()
 
     # ── Device probe (same pattern as HFClassifier) ───────────────────────────
     device_id = -1
@@ -394,17 +403,25 @@ def train(
         callbacks=[EarlyStoppingCallback(early_stopping_patience=2)],
     )
 
-    logger.info("Starting Phase 3 main training...")
-    trainer.train(resume_from_checkpoint=True if resume else None)
+    if not adversarial_only:
+        logger.info("Starting Phase 3 main training...")
+        trainer.train(resume_from_checkpoint=True if resume else None)
+
+        # Save after main training so --adversarial-only can resume if adv pass crashes.
+        if use_adversarial_training:
+            logger.info("Saving post-main-training model (crash recovery checkpoint)...")
+            aegis_model._module = model
+            aegis_model.save_pretrained(HF2_MODEL_OUTPUT, tokenizer=tokenizer, temperature_scaling=1.0)
+            logger.info("Crash-recovery model.pt written to %s", HF2_MODEL_OUTPUT)
 
     # ── Optional adversarial fine-tuning pass ─────────────────────────────────
-    if use_adversarial_training:
+    if use_adversarial_training or adversarial_only:
         logger.info("Starting adversarial fine-tuning pass (2 epochs)...")
         # Rebuild train dataset with augmented hard examples
         train_df = pd.DataFrame({
             "text": dataset["train"]["text"],
-            "label": [int(l) for l in dataset["train"]["labels"]],
-            "threat_label": [int(t) for t in dataset["train"]["threat_labels"]],
+            "label": [int(l) for l in dataset["train"]["label"]],
+            "threat_label": [int(t) for t in dataset["train"]["threat_label"]],
         })
         aug_df = augment_hard_negatives(train_df)
         aug_ds = Dataset.from_pandas(aug_df)
@@ -424,10 +441,13 @@ def train(
             save_strategy="no",
             fp16=False,
             bf16=False,
+            max_grad_norm=1.0,
             report_to="none",
             dataloader_pin_memory=False,
             dataloader_num_workers=num_workers,
             gradient_accumulation_steps=16,
+            gradient_checkpointing=True,
+            gradient_checkpointing_kwargs={"use_reentrant": False},
             remove_unused_columns=False,
         )
         adv_trainer = AegisMTTrainer(
@@ -440,10 +460,13 @@ def train(
             compute_metrics=compute_metrics,
         )
         adv_trainer.train()
+        eval_trainer = adv_trainer
+    else:
+        eval_trainer = trainer
 
     # ── Final test evaluation ──────────────────────────────────────────────────
     logger.info("Evaluating on test set...")
-    test_results = trainer.evaluate(tokenised["test"])
+    test_results = eval_trainer.evaluate(tokenised["test"])
     logger.info("Test results: %s", test_results)
 
     # ── Temperature calibration ───────────────────────────────────────────────
@@ -489,6 +512,11 @@ def main() -> None:
         help="Resume from the latest checkpoint in the output directory",
     )
     parser.add_argument(
+        "--adversarial-only",
+        action="store_true",
+        help="Skip main training; load saved model and run adversarial fine-tuning pass only",
+    )
+    parser.add_argument(
         "--num-workers",
         type=int,
         default=2,
@@ -505,6 +533,7 @@ def main() -> None:
         use_adversarial_training=args.adversarial_training,
         num_workers=args.num_workers,
         resume=args.resume,
+        adversarial_only=args.adversarial_only,
     )
 
 
