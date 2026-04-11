@@ -30,8 +30,10 @@ uv.lock
 .env.*.local
 
 # Trained models (large binary files — store separately)
-models/*.joblib
+# sklearn model is small enough to commit and is bundled with the HF Space.
 models/*.pkl
+models/*.joblib
+!models/sklearn_classifier.joblib
 models/hf_classifier*/
 models/hf_classifier_onnx*/
 models/hf2_classifier*/

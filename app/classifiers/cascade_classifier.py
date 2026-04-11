@@ -109,4 +109,27 @@ class CascadeClassifier:
             self.high_threshold,
         )
         slow_result = await self.slow_clf.predict(text)
+
+        # Take the maximum malicious probability from both stages so that a
+        # strong sklearn signal is never cancelled by a less-accurate slow
+        # classifier (e.g. INT8-quantised ONNX dropping a clear attack below
+        # the final threshold).
+        slow_prob: float = slow_result.get("malicious_prob", 0.0)
+        if sk_prob > slow_prob:
+            logger.debug(
+                "Cascade: sklearn signal (%.3f) > slow clf (%.3f) — using sklearn prob",
+                sk_prob,
+                slow_prob,
+            )
+            combined_prob = sk_prob
+            combined_benign = 1.0 - sk_prob
+            combined_label = "malicious" if combined_prob >= 0.5 else "benign"
+            return {
+                **slow_result,
+                "malicious_prob": combined_prob,
+                "benign_prob": combined_benign,
+                "label": combined_label,
+                "stage": f"sklearn_override({self.slow_clf_label})",
+            }
+
         return {**slow_result, "stage": self.slow_clf_label}

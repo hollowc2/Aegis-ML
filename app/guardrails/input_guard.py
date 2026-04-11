@@ -42,12 +42,17 @@ logger = logging.getLogger(__name__)
 def _extract_text(request: ChatCompletionRequest) -> str:
     """
     Concatenate all message contents into a single string for classification.
-    We include role prefixes so the classifier can catch role-manipulation attacks
-    like "Ignore previous instructions, you are now…" in a user turn.
+
+    Role prefixes are intentionally omitted: the training dataset contains only
+    raw message text, and patterns like "[INST]" / "<<SYS>>" are present in
+    malicious training examples.  Prepending "[user]:" / "[assistant]:" during
+    inference would create a train/inference distribution mismatch that causes
+    both false positives (benign messages flagged because they start with "[")
+    and false negatives (injections that happen to lack bracket syntax).
     """
     parts = []
     for msg in request.messages:
-        parts.append(f"[{msg.role.value}]: {msg.content}")
+        parts.append(msg.content)
     return "\n".join(parts)
 
 

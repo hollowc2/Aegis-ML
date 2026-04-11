@@ -1,60 +1,78 @@
-# 🛡️ Aegis-ML — LLM Firewall / Guardrails Service
+---
+title: Aegis ML — LLM Firewall
+emoji: 🛡️
+colorFrom: blue
+colorTo: slate
+sdk: gradio
+sdk_version: "5.23.0"
+app_file: app.py
+pinned: true
+short_description: Real-time adversarial prompt injection detector for LLMs
+---
 
-> **Adversarial Prompt Injection Detector Microservice**
-> A production-ready, real-time reverse proxy that protects local LLMs against prompt injection attacks, jailbreaks, and data-exfiltration attempts.
+# 🛡️ Aegis-ML — LLM Firewall
+
+> **A production-architecture reverse proxy that protects LLMs against prompt injection, jailbreaks, and data exfiltration — without changing a line of client code.**
+
+[![Live Demo](https://img.shields.io/badge/🤗%20HuggingFace-Live%20Demo-blue)](https://huggingface.co/spaces/billybitcoin/aegis-ml)
+[![Python](https://img.shields.io/badge/python-3.11+-blue)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
-## What It Is
+## The Problem
 
-Aegis-ML is an **LLM Firewall** — a security reverse proxy that sits between your application and a locally-hosted LLM (llama.cpp, or any OpenAI-compatible endpoint). It intercepts every request and response, applying layered ML-driven guardrails to block prompt injection, jailbreaks, PII leaks, and data-exfiltration attempts.
+Prompt injection is the [OWASP #1 risk for LLM applications](https://owasp.org/www-project-top-10-for-large-language-model-applications/). When a user — or malicious content in a document, API response, or tool output — can override an LLM's instructions, the model becomes a weapon against its own operator. Existing mitigations are advisory (tell the model to be careful) rather than architectural.
 
-It is **drop-in compatible** with the OpenAI API. Point your client at Aegis instead of your LLM, and nothing else changes.
+Aegis-ML takes an architectural approach: **intercept every request before it touches the model, classify it with an ML guardrail, and block if malicious**. The LLM never sees the attack.
 
 ---
 
-## How It Works
+## What It Does
 
-Every request passes through a 6-stage pipeline:
+Aegis-ML is an **OpenAI-compatible reverse proxy** — point your application at it instead of your LLM endpoint, and nothing else changes. Under the hood, every request flows through a 6-stage pipeline:
 
 ```
 Client Request
     ↓
-[1] Rate Limiting          — per-IP request throttle (slowapi)
+[1] Rate Limiting          — per-IP throttle, slowapi
     ↓
-[2] Input Classifier       — ML model scores prompt for malicious intent
-                             Block (403) if malicious_prob ≥ threshold
+[2] Input Guardrail        — ML classifier scores the prompt
+                             Block 403 if malicious_prob ≥ threshold (default 0.70)
     ↓
-[3] Canary Token Injection — random 32-char token embedded in system prompt
+[3] Canary Token Injection — cryptographic token embedded in the system prompt
     ↓
-[4] Reverse Proxy          — forward patched request to backend LLM
+[4] Reverse Proxy          — patched request forwarded to backend LLM (llama.cpp / any OAI-compatible)
     ↓
-[5] Output Guardrail       — check canary echo (injection success?),
-                             redact PII, filter harmful content
+[5] Output Guardrail       — detect canary echo (injection success), redact PII, filter harmful keywords
     ↓
-[6] Audit Log              — record verdict, threat type, latency to SQLite
+[6] Audit Log              — every decision written to SQLite: verdict, threat type, latency
     ↓
 Client Response (200 OK or 403 Forbidden)
 ```
 
-### Defense Layers in Detail
-
-**Input Classifier** — Extracts text from all messages (including role labels, to catch role-manipulation attacks) and runs it through an ML classifier. If `malicious_prob ≥ threshold` (default `0.70`), the request is blocked immediately — the backend LLM is never called. Any classifier exception also blocks (fail-secure).
-
-**Canary Token System** — A cryptographically random token is injected into the system prompt as `[SYS_REF:TOKEN]` for every request. If that token appears anywhere in the model's response, it means a prompt injection succeeded in leaking the system prompt — the response is blocked and the incident is logged as a `canary_leak`.
-
-**Output Guardrail** — Scans every LLM response for:
-- Canary token echo (prompt injection confirmation)
-- PII patterns: SSN, credit card numbers, emails, phone numbers, IPv4 addresses, AWS keys, private key headers
-- Harmful content keywords
-
-PII is redacted from the response; harmful content and canary leaks result in a 403 block.
-
-**Audit Log** — Every request is logged to SQLite with: `request_id`, `client_ip`, `input_verdict`, `input_confidence`, `threat_type`, `output_verdict`, `latency_ms`. Prompt text can optionally be masked for GDPR compliance (`REDACT_PROMPTS_IN_LOGS=true`).
+**Every layer is fail-secure**: any exception in the guardrail pipeline blocks the request rather than allowing it through.
 
 ---
 
-## Architecture
+## Three-Phase Classifier Architecture
+
+One of the core design decisions in this project is treating classifier accuracy and inference latency as a tunable tradeoff. Three classifiers are implemented, tested, and compared:
+
+| Phase | Model | Accuracy | P50 Latency | RAM |
+|-------|-------|----------|-------------|-----|
+| **Phase 1** | TF-IDF + Logistic Regression | ~91% F1 | <1 ms | ~50 MB |
+| **Phase 2** | Fine-tuned DistilBERT / DeBERTa-v3-small | ~95% F1 | 5–15 ms | ~400 MB |
+| **Phase 3** | Multi-task DeBERTa-v3-base (15 attack categories, INT8 ONNX) | ~97% F1 | 8–20 ms | ~500 MB |
+| **Cascade** | sklearn fast-path → ONNX slow-path | ~97% F1 | ~1–2 ms avg | ~550 MB |
+
+The **cascade classifier** is the production recommendation: sklearn handles ~85% of traffic in <1 ms; only ambiguous inputs are escalated to the neural model. The sklearn fast-path score is never discarded — it acts as a floor so a quantized ONNX model can't silently pass a clearly malicious prompt.
+
+The Evasive Threats section of the demo is specifically designed to show *where Phase 1 fails and Phase 2/3 succeeds*: Unicode homoglyph attacks, indirect injection via document context, paraphrase attacks, and nested role confusion — none of which contain the keyword patterns TF-IDF relies on.
+
+---
+
+## Architecture Diagram
 
 ```mermaid
 graph TB
@@ -73,64 +91,49 @@ graph TB
         Redact --> Response
     end
 
-    Proxy -->|"patched request"| LLM["llama.cpp\nKimi-K2.5 GGUF"]
+    Proxy -->|"patched request"| LLM["llama.cpp / OAI-compatible LLM"]
     LLM --> OutputGuard
 
     FastAPI --> AuditDB["SQLite\nAudit Log"]
     FastAPI --> Prometheus["Prometheus\n/metrics"]
 ```
 
-### Phase Progression
+---
 
-| Phase | Classifier | Accuracy | Latency | RAM |
-|-------|-----------|----------|---------|-----|
-| Phase 1 | TF-IDF + Logistic Regression | ~90-93% | <1 ms | ~50 MB |
-| Phase 2 | Fine-tuned DistilBERT (4-bit QLoRA) | ~94-97% | 5-15 ms | ~400 MB |
-| Phase 3 | Side-by-side comparison notebook | — | — | — |
+## Live Demo (HuggingFace Spaces)
+
+**[Try it here →](https://huggingface.co/spaces/billybitcoin/aegis-ml)**
+
+The Space runs in Demo Mode using the Phase 1 (sklearn) classifier — no LLM backend is connected. You can:
+
+- Send attack prompts and see them blocked with confidence scores
+- Send benign prompts and watch them pass
+- Switch classifiers (sklearn vs HF) to compare how Phase 1 misses evasive attacks that Phase 2/3 catches
+- Browse 31 pre-loaded evasive attack examples across 5 categories
 
 ---
 
-## Quick Start
+## Quick Start (Local)
 
 ### Prerequisites
 
 - Python 3.11+
-- [UV](https://docs.astral.sh/uv/getting-started/installation/) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
-- (Phase 2 only) CUDA-capable GPU
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- (Phase 2/3 only) CUDA or ROCm GPU
 
-### 1. Install dependencies
+### 1. Install
 
 ```bash
-# Base install (Phase 1 — sklearn only)
-uv sync
-
-# With HuggingFace / PyTorch (Phase 2)
-uv sync --extra hf
-
-# With dev tools + testing
-uv sync --extra dev
-
-# Everything
-uv sync --all-extras
+uv sync                    # Base: sklearn + Gradio demo
+uv sync --extra hf2        # Add Phase 2/3: torch + transformers + ONNX
+uv sync --extra dev        # Add dev tools: pytest, ruff, mypy
 ```
 
-### 2. Configure environment
+### 2. Train Phase 1 classifier
 
 ```bash
-cp .env.example .env
-# Edit .env — set BACKEND_URL to your llama.cpp server
-```
-
-### 3. Train Phase 1 (scikit-learn)
-
-```bash
-# Download + prepare dataset
-uv run python -m training.data.prepare_dataset
-
-# Train TF-IDF + Logistic Regression
-uv run python -m training.phase1_sklearn.train
-
-# Evaluate and see metrics
+uv run python -m training.data.prepare_dataset  # downloads public HF datasets
+uv run python -m training.phase1_sklearn.train  # ~30 s
 uv run python -m training.phase1_sklearn.evaluate
 ```
 
@@ -140,232 +143,116 @@ ROC-AUC          : 0.9821
 F1               : 0.9312
 FPR              : 3.2%       ← under 5% target ✓
 Latency          : 0.4 ms/sample
-Model saved to models/sklearn_classifier.joblib
 ```
 
-### 4. Start the service
+### 3. Run the demo UI (no LLM required)
 
 ```bash
-uv run python -m app.main
-# OR
+uv run aegis-demo
+# → http://localhost:7860
+```
+
+### 4. Run the full proxy (requires a running LLM backend)
+
+```bash
+cp .env.example .env
+# edit .env — set BACKEND_URL to your llama.cpp endpoint
+
 uv run aegis-serve
-```
-
-Service available at: `http://localhost:8000`
-- API docs: `http://localhost:8000/docs`
-- Health: `http://localhost:8000/health`
-- Metrics: `http://localhost:8000/metrics`
-
-### 5. Launch the Gradio demo UI
-
-```bash
-uv run python -m demo.gradio_ui
-# Open: http://localhost:7860
+# → http://localhost:8000
 ```
 
 ---
 
-## Phase 2 — Fine-tune HuggingFace Model
-
-Train on your desktop GPU:
+## Phase 2 & 3 Training
 
 ```bash
-# Full fine-tune DistilBERT (requires ~4 GB VRAM)
-uv run python -m training.phase2_hf.train --model distilbert --epochs 5
-
-# 4-bit QLoRA (requires only ~2 GB VRAM)
-uv run python -m training.phase2_hf.train --model distilbert --qlora --epochs 5
-
-# Higher accuracy: DeBERTa-v3-small (requires ~6 GB VRAM)
+# Phase 2 — fine-tune DistilBERT or DeBERTa-v3-small
 uv run python -m training.phase2_hf.train --model deberta --epochs 5
 
-# Evaluate
-uv run python -m training.phase2_hf.evaluate
+# Phase 3 — multi-task DeBERTa-v3-base (15 attack categories)
+uv run python -m training.phase3_hf2.train --model deberta-base --epochs 12
+
+# Export Phase 3 to INT8 ONNX for production serving
+uv run python -m training.phase3_hf2.export_onnx
 ```
 
-Switch the running service to use the HF model:
+AMD ROCm (RX 7700 XT / gfx1101):
 ```bash
-# In .env:
-CLASSIFIER_TYPE=hf
-HF_MODEL_PATH=models/hf_classifier
+HSA_OVERRIDE_GFX_VERSION=11.0.0 uv run python -m training.phase3_hf2.train
 ```
 
 ---
 
-## Phase 3 — Comparison Notebook
+## Deploying to HuggingFace Spaces
+
+HF Spaces hosts the Gradio demo for free. The Space uses only the sklearn classifier (no GPU required).
+
+### One-time setup
 
 ```bash
-uv sync --extra notebook
-uv run jupyter lab notebooks/phase3_comparison.ipynb
+# 1. Train the sklearn model locally
+uv run python -m training.data.prepare_dataset
+uv run python -m training.phase1_sklearn.train
+
+# 2. Create a new Space at huggingface.co/new-space
+#    SDK: Gradio  |  Visibility: Public
+#    (creates a git repo at huggingface.co/spaces/<username>/aegis-ml)
+
+# 3. Add the HF Space as a remote
+git remote add space https://huggingface.co/spaces/<your-username>/aegis-ml
+
+# 4. The sklearn model is now tracked (see .gitignore exception)
+git add models/sklearn_classifier.joblib
+git commit -m "Add bundled sklearn model for HF Spaces"
+
+# 5. Push — Spaces builds automatically
+git push space main
 ```
 
-The notebook produces:
-- Side-by-side metrics table (F1, FPR, latency, RAM)
-- Threshold tuning curves
-- Confusion matrices + ROC curves
-- Resource usage comparison
+### What happens on push
 
----
+HF Spaces reads the YAML frontmatter at the top of this README, installs `requirements.txt`, and runs `app.py`. The sklearn model is loaded from `models/sklearn_classifier.joblib`. If the file is missing, `app.py` auto-trains it on first cold start (~60 s).
 
-## Docker
-
-### Build and run locally
+### Updating the Space
 
 ```bash
-# Phase 1 only (lightweight, ~600 MB image)
-docker build -t aegis-ml .
-
-# With HuggingFace support (~3 GB image)
-docker build --build-arg EXTRAS=hf -t aegis-ml:hf .
-
-# Run
-docker run -p 8000:8000 \
-  -v $(pwd)/models:/app/models:ro \
-  -v $(pwd)/logs:/app/logs \
-  -e BACKEND_URL=http://host.docker.internal:8080/v1/chat/completions \
-  aegis-ml
-```
-
-### Docker Compose (service + demo UI)
-
-```bash
-# Copy and configure
-cp .env.example .env
-
-# Start everything
-docker compose up --build
-
-# Production (detached)
-docker compose up -d --build
+git push space main        # push latest changes to HF
+git push origin main       # push to GitHub (independent)
 ```
 
 ---
 
-## Deploy to Hostinger VPS (2 vCPU / 8 GB)
+## Configuration
 
-### 1. Set up the VPS
-
-```bash
-# SSH in
-ssh user@your-vps-ip
-
-# Install Docker
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
-
-# Install UV (optional — for running without Docker)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-### 2. Transfer the project
-
-```bash
-# From your local machine:
-rsync -avz --exclude '.venv' --exclude '__pycache__' \
-  /mnt/Files/Projects/Python/Aegis-ML/ \
-  user@your-vps-ip:/home/user/aegis-ml/
-
-# Or clone from git:
-git clone https://github.com/yourusername/aegis-ml.git
-cd aegis-ml
-```
-
-### 3. Transfer your trained model
-
-```bash
-rsync -avz models/sklearn_classifier.joblib \
-  user@your-vps-ip:/home/user/aegis-ml/models/
-```
-
-### 4. Deploy
-
-```bash
-# On the VPS:
-cd /home/user/aegis-ml
-cp .env.example .env
-# Edit .env — set BACKEND_URL to your llama.cpp server
-
-docker compose up -d --build
-
-# Verify
-curl http://localhost:8000/health
-```
-
-### 5. Nginx reverse proxy (optional, for HTTPS)
-
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-
-    location / {
-        proxy_pass http://localhost:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 120s;
-    }
-}
-```
-
-### Resource usage on VPS
-
-| Component | RAM | CPU |
-|-----------|-----|-----|
-| FastAPI + sklearn | ~150 MB | <5% idle |
-| SQLite audit DB | ~10 MB | minimal |
-| Total (Phase 1) | **~200 MB** | ✓ well under 8 GB |
-
----
-
-## Configuration Reference
-
-All settings are read from `.env` (copy from `.env.example`).
+All settings are read from `.env` (copy `.env.example`):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CLASSIFIER_TYPE` | `sklearn` | `sklearn` (Phase 1) or `hf` (Phase 2) |
-| `CONFIDENCE_THRESHOLD` | `0.70` | Block if `malicious_prob ≥` this value |
-| `BACKEND_URL` | `http://localhost:8080/v1/chat/completions` | Your LLM endpoint |
-| `BACKEND_API_KEY` | *(empty)* | Bearer token for backend auth (empty = no auth) |
-| `RATE_LIMIT_PER_MINUTE` | `60` | Max requests per IP per minute |
-| `SKLEARN_MODEL_PATH` | `models/sklearn_classifier.joblib` | Phase 1 model artifact |
-| `HF_MODEL_PATH` | `models/hf_classifier` | Phase 2 model directory |
-| `CANARY_TOKEN_LENGTH` | `32` | Length of per-request canary tokens |
-| `DATABASE_URL` | `sqlite+aiosqlite:///./logs/aegis_audit.db` | Audit log database |
-| `REDACT_PROMPTS_IN_LOGS` | `false` | Mask prompt text in audit logs (GDPR) |
-| `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
-| `HOST` / `PORT` | `0.0.0.0` / `8000` | Service bind address |
-
----
-
-## Switching Between Classifiers
-
-```bash
-# .env
-CLASSIFIER_TYPE=sklearn    # Phase 1 (default, fast)
-CLASSIFIER_TYPE=hf         # Phase 2 (accurate, GPU recommended)
-```
-
-Then restart the service. No code changes needed.
+| `CLASSIFIER_TYPE` | `sklearn` | `sklearn` · `hf` · `hf2` · `onnx2` · `cascade` · `cascade2` |
+| `CONFIDENCE_THRESHOLD` | `0.70` | Block if `malicious_prob ≥` this |
+| `BACKEND_URL` | `http://localhost:8080/v1/chat/completions` | LLM endpoint |
+| `CASCADE_SK_LOW_THRESHOLD` | `0.05` | sklearn score ≤ this → fast-path benign |
+| `CASCADE_SK_HIGH_THRESHOLD` | `0.95` | sklearn score ≥ this → fast-path malicious |
+| `RATE_LIMIT_PER_MINUTE` | `60` | Per-IP request cap |
+| `REDACT_PROMPTS` | `false` | Omit prompt text from audit log (GDPR) |
+| `DATABASE_URL` | `sqlite+aiosqlite:///./logs/aegis_audit.db` | Audit log |
 
 ---
 
 ## API Reference
 
-### POST `/v1/chat/completions`
+### `POST /v1/chat/completions`
 
-OpenAI-compatible endpoint. Drop-in replacement — just point your client here instead of OpenAI.
+OpenAI-compatible. Drop-in replacement — point your client here instead of OpenAI.
 
 ```bash
 curl -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{
-    "model": "local-model",
-    "messages": [{"role": "user", "content": "What is Python?"}]
-  }'
+  -d '{"model": "local-model", "messages": [{"role": "user", "content": "What is Python?"}]}'
 ```
 
-**Blocked request (403):**
+Blocked response (403):
 ```json
 {
   "error": {
@@ -376,79 +263,30 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 }
 ```
 
-### GET `/health`
+### `GET /health` · `GET /metrics` · `GET /audit/logs`
 
-```json
-{
-  "status": "ok",
-  "classifier": "sklearn",
-  "classifier_loaded": true,
-  "version": "1.0.0"
-}
-```
-
-### GET `/metrics`
-
-Prometheus text format. Key metrics:
-
-| Metric | Description |
-|--------|-------------|
-| `aegis_requests_total` | Total requests by verdict (allowed/blocked_input/blocked_output) |
-| `aegis_request_latency_seconds` | End-to-end latency histogram |
-| `aegis_classifier_latency_seconds` | Classifier inference latency |
-| `aegis_canary_leaks_total` | Canary token leaks detected |
-| `aegis_input_blocks_total` | Requests blocked at input |
-| `aegis_output_blocks_total` | Responses blocked at output |
-
-### GET `/audit/logs?limit=50`
-
-Returns recent audit log entries from SQLite.
+Health check, Prometheus metrics, and paginated audit log.
 
 ---
 
-## Security Design
+## Security Design Notes
 
-### Input Guardrail
-1. Extract all message content (including role labels — catches role-manipulation attacks)
-2. Run through active classifier (sklearn or HF)
-3. If `confidence ≥ threshold` → return 403 immediately, no LLM call
-4. **Fail-secure**: any exception → block
+**Canary tokens** — A cryptographically random token is injected into the system prompt for every request. If it appears in the model's response, the injection succeeded in leaking the system prompt — the response is blocked and logged as a `canary_leak`. This catches attacks that slip past the input classifier.
 
-### Canary Token System
-- Per-request cryptographically random token (UUID-grade entropy)
-- Embedded in system prompt as `[SYS_REF:TOKEN]`
-- If token appears in model output → successful injection detected → block response
-- One-time use (consumed immediately after output check)
+**Output guardrail** — Independently scans every LLM response for canary echoes, PII (SSN, credit card, email, phone, IPv4, AWS keys), and harmful content keywords. PII is redacted; the others block the response.
 
-### Output Guardrail
-1. **Canary check** — detect injection success
-2. **PII redaction** — SSN, credit card, email, phone, IPv4, AWS keys, private key headers
-3. **Harm filter** — keyword-based detection of clearly harmful content
-4. **Fail-secure**: any exception → block
+**Fail-secure** — Any exception in the guardrail pipeline (classifier load failure, timeout, unexpected input) blocks the request with a 403. The LLM is never the fallback.
 
-### Threshold Tuning
-Default threshold: `0.70`
-
-Lower = stricter (fewer missed injections, more false positives)
-Higher = more permissive (fewer false positives, more missed injections)
-
-The training script outputs the optimal threshold after tuning:
-```
-Threshold tuning → optimal threshold=0.73  FPR=3.8%
-```
-
-Update in `.env`: `CONFIDENCE_THRESHOLD=0.73`
+**Threshold tuning** — Default threshold is `0.70`. The training scripts output an optimal threshold from validation FPR analysis. Lower = more aggressive (higher FPR, lower FNR); higher = more permissive. The cascade classifier uses a separate `sk_low / sk_high` band for the sklearn fast-path.
 
 ---
 
 ## Testing
 
 ```bash
-# Run all tests
 uv run pytest tests/ -v
-
-# With coverage
 uv run pytest tests/ -v --cov=app --cov-report=html
+uv run pytest tests/ -k "canary"   # run a specific test
 ```
 
 ---
@@ -457,65 +295,52 @@ uv run pytest tests/ -v --cov=app --cov-report=html
 
 ```
 Aegis-ML/
-├── app/                        # FastAPI service
-│   ├── main.py                 # App factory + lifespan
-│   ├── config.py               # Pydantic v2 settings
-│   ├── models/
-│   │   ├── schemas.py          # Pydantic schemas (OpenAI-compatible)
-│   │   └── database.py         # Async SQLite audit log
-│   ├── guardrails/
-│   │   ├── canary.py           # Canary token generation + detection
-│   │   ├── input_guard.py      # Input classifier pipeline
-│   │   └── output_guard.py     # Output PII/harm filter
+├── app.py                          # HuggingFace Spaces entry point
+├── requirements.txt                # HF Spaces slim deps (sklearn + Gradio)
+├── app/                            # FastAPI service
+│   ├── main.py                     # App factory + classifier loader
+│   ├── config.py                   # Pydantic v2 settings
 │   ├── classifiers/
-│   │   ├── sklearn_classifier.py  # Phase 1: TF-IDF + LR
-│   │   └── hf_classifier.py       # Phase 2: Fine-tuned DistilBERT
-│   ├── proxy/
-│   │   └── llm_proxy.py        # httpx reverse proxy to llama.cpp
-│   └── api/
-│       ├── routes.py           # All FastAPI route handlers
-│       └── middleware.py       # Rate limiting + request logging
+│   │   ├── sklearn_classifier.py   # Phase 1: TF-IDF + LR
+│   │   ├── hf_classifier.py        # Phase 2: DistilBERT / DeBERTa-v3-small
+│   │   ├── hf2_classifier.py       # Phase 3: multi-task DeBERTa-v3-base
+│   │   ├── onnx2_classifier.py     # Phase 3: INT8 ONNX runtime
+│   │   └── cascade_classifier.py   # Two-stage: sklearn → ONNX (max-score merge)
+│   ├── guardrails/
+│   │   ├── input_guard.py          # Input classification pipeline
+│   │   ├── output_guard.py         # PII redaction + harm filter
+│   │   └── canary.py               # Canary token generation + TTL store
+│   ├── proxy/llm_proxy.py          # httpx async reverse proxy
+│   └── api/routes.py               # FastAPI route handlers
 ├── training/
 │   ├── data/
-│   │   ├── prepare_dataset.py  # Download + combine datasets
-│   │   └── synthetic_gen.py    # Local synthetic example generator
-│   ├── phase1_sklearn/
-│   │   ├── train.py            # GridSearchCV + threshold tuning
-│   │   └── evaluate.py         # Metrics + demo predictions
-│   └── phase2_hf/
-│       ├── train.py            # HF Trainer + QLoRA support
-│       └── evaluate.py         # HF model evaluation
-├── demo/
-│   └── gradio_ui.py            # Standalone Gradio chat UI
-├── notebooks/
-│   └── phase3_comparison.ipynb # Side-by-side comparison
+│   │   ├── prepare_dataset.py      # Merge 10 public HF datasets + synthetic gen
+│   │   └── synthetic_gen.py        # Phase 3 attack augmentation generators
+│   ├── phase1_sklearn/             # GridSearchCV + threshold tuning
+│   ├── phase2_hf/                  # HF Trainer + QLoRA
+│   └── phase3_hf2/                 # Multi-task DeBERTa + temperature calibration
+├── demo/gradio_ui.py               # Gradio chat UI (Demo Mode + API Proxy Mode)
+├── models/
+│   └── sklearn_classifier.joblib  # Bundled Phase 1 model (committed, ~15 MB)
 ├── tests/
-│   ├── test_guardrails.py      # Unit tests for guardrails
-│   └── test_proxy.py           # Integration tests
-├── models/                     # Trained model artifacts (gitignored)
-├── logs/                       # SQLite audit DB (gitignored)
-├── data/                       # Combined dataset (gitignored)
-├── Dockerfile                  # UV multi-stage build
-├── docker-compose.yml          # Service + demo orchestration
-├── pyproject.toml              # UV project config
-└── .env.example                # Environment variable template
+├── Dockerfile
+├── docker-compose.yml
+└── pyproject.toml                  # uv project config (full dep set)
 ```
 
 ---
 
-## Portfolio Talking Points
+## Portfolio Context
 
-**1. Production security architecture** — Layered defence: rate limiting → input classification → canary injection → output guardrails → audit logging. Every layer is fail-secure.
+This project demonstrates an end-to-end ML security system built around a realistic threat model. Key aspects worth noting for technical reviewers:
 
-**2. ML lifecycle** — Full pipeline from dataset curation (public HF + synthetic generation) through training (Phase 1: classical ML with GridSearchCV; Phase 2: LLM fine-tuning with 4-bit QLoRA) to production serving.
+**Security architecture over security theater** — The system intercepts at the infrastructure layer, not the prompt layer. An attacker who bypasses the classifier still faces the canary token system; one who bypasses both still faces output guardrails and audit logging.
 
-**3. Metric-driven threshold tuning** — Quantified false-positive target (<5% FPR) with automated threshold discovery. Demonstrates understanding that model accuracy ≠ production safety.
+**Full ML lifecycle** — Dataset curation (10 public HuggingFace datasets + synthetic generation for evasive attacks), training pipelines for three model families, threshold tuning against a quantified FPR target (<5%), temperature calibration, and INT8 ONNX export for production serving.
 
-**4. Modern Python stack** — UV for dependency management, Pydantic v2 for validation, async FastAPI with proper lifespan management, httpx for async HTTP, aiosqlite for non-blocking DB.
+**Cascade classifier design** — The two-stage cascade was designed to hit ~97% F1 at ~1–2 ms average latency by handling obvious cases with sklearn and only escalating ambiguous inputs to the neural model. The max-score merge ensures the sklearn signal isn't silently cancelled by quantization error in the ONNX model.
 
-**5. Operational readiness** — Prometheus metrics, health checks, structured audit logging, Docker multi-stage build, docker-compose for local and production.
-
-**6. Security-first thinking** — Canary tokens detect post-injection compromise. PII redaction in output prevents data leaks even from benign model misbehaviour. Configurable redaction in audit logs for compliance.
+**Production-ready infrastructure** — Prometheus metrics, async SQLite audit logging, per-IP rate limiting, Docker multi-stage builds, GDPR-compliant prompt redaction in logs, and an OpenAI-compatible API surface so the proxy is drop-in without client changes.
 
 ---
 

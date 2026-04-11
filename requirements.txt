@@ -1,0 +1,26 @@
+# HuggingFace Spaces requirements.
+#
+# Intentionally torch-free: the ONNX2 classifier uses onnxruntime for
+# inference and only needs the transformers *tokenizer* (no torch required).
+# This keeps the Space image ~1.5 GB instead of ~4 GB with torch.
+
+# Gradio UI
+gradio>=5.0.0
+httpx>=0.28.0
+
+# Phase 1 — sklearn classifier
+scikit-learn>=1.6.0
+joblib>=1.4.0
+numpy>=1.26.0
+pandas>=2.2.0
+
+# Phase 3 — ONNX2 classifier (torch-free inference path)
+onnxruntime>=1.19.0
+transformers>=4.47.0
+sentencepiece>=0.2.0
+protobuf>=5.29.0
+scipy>=1.13.0
+
+# HF Hub (model download at startup + dataset download for auto-training)
+huggingface_hub>=0.26.0
+datasets>=3.2.0

@@ -303,7 +303,23 @@ EVASIVE_THREATS_CONTINUATION = [
 
 # ── Gradio UI Layout ──────────────────────────────────────────────────────────
 
-def build_ui() -> gr.Blocks:
+def build_ui(onnx2_available: bool = True) -> gr.Blocks:
+    """
+    Build the Gradio demo.
+
+    Parameters
+    ----------
+    onnx2_available:
+        When False (e.g. model not yet downloaded on HF Spaces), the onnx2
+        option is labelled as unavailable so the user understands why it falls
+        back to keyword heuristics instead of silently mis-classifying.
+    """
+    classifier_choices = ["sklearn", "hf", "hf2"]
+    if onnx2_available:
+        classifier_choices.append("onnx2")
+    else:
+        classifier_choices.append("onnx2 (unavailable — model not loaded)")
+
     with gr.Blocks(title="Aegis-ML — LLM Firewall") as demo:
 
         # ── Header ────────────────────────────────────────────────────────────
@@ -355,10 +371,10 @@ def build_ui() -> gr.Blocks:
                         info="Demo: local classifier only. API: full proxy pipeline.",
                     )
                     classifier_selector = gr.Radio(
-                        choices=["hf2", "hf", "sklearn", "onnx2"],
-                        value="hf2",
+                        choices=classifier_choices,
+                        value="sklearn",
                         label="Classifier",
-                        info="hf2 = DeBERTa Multi-Task (Phase 3) · hf = DistilBERT (Phase 2) · sklearn = TF-IDF (Phase 1) · onnx2 = Phase 3 ONNX",
+                        info="sklearn = TF-IDF (Phase 1) · hf = DistilBERT (Phase 2) · hf2 = DeBERTa Multi-Task (Phase 3) · onnx2 = Phase 3 INT8 ONNX",
                     )
                     show_details = gr.Checkbox(
                         value=True,
@@ -482,7 +498,7 @@ def build_ui() -> gr.Blocks:
 
 
 def main() -> None:
-    demo = build_ui()
+    demo = build_ui(onnx2_available=True)
     demo.launch(
         server_name="0.0.0.0",
         server_port=DEMO_PORT,
