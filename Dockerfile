@@ -38,10 +38,10 @@ COPY training/ ./training/
 # Which optional extras to install (default: base only; override with --build-arg EXTRAS=hf)
 ARG EXTRAS=""
 
-# Install dependencies into a venv using UV
-# --mount=type=cache speeds up repeated builds by caching the UV download cache
-RUN --mount=type=cache,target=/root/.cache/uv \
-    if [ -z "$EXTRAS" ]; then \
+# Install locked dependencies into a venv using UV. This intentionally avoids
+# BuildKit-only cache mounts so the image also builds with Docker's legacy
+# builder.
+RUN if [ -z "$EXTRAS" ]; then \
         UV_PROJECT_ENVIRONMENT=/app/.venv uv sync \
             --frozen --no-dev --no-editable; \
     else \
