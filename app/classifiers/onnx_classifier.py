@@ -70,8 +70,9 @@ class ONNXClassifier:
                 "AMD ROCm users: pip install onnxruntime-rocm"
             ) from exc
 
-        from transformers import AutoTokenizer
         import json
+
+        from transformers import AutoTokenizer
 
         path = Path(self.model_path)
         onnx_file = path / "model.onnx"
@@ -86,9 +87,7 @@ class ONNXClassifier:
             (p for p in _PROVIDER_PREFERENCE if p in available_providers),
             "CPUExecutionProvider",
         )
-        logger.info(
-            "Loading ONNX classifier from %s using %s", path, provider
-        )
+        logger.info("Loading ONNX classifier from %s using %s", path, provider)
 
         sess_opts = ort.SessionOptions()
         sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
@@ -131,7 +130,6 @@ class ONNXClassifier:
 
     def _predict_sync(self, text: str) -> dict[str, Any]:
         """Synchronous ORT inference — called inside a thread pool worker."""
-        import numpy as np
         from scipy.special import softmax
 
         assert self._session is not None and self._tokenizer is not None
@@ -151,13 +149,12 @@ class ONNXClassifier:
         logits = self._session.run(["logits"], feed)[0][0]  # shape: (num_labels,)
         probs = softmax(logits).tolist()
 
-        label_to_prob = {
-            str(self._id2label[k]).upper(): probs[int(k)]
-            for k in self._id2label
-        }
+        label_to_prob = {str(self._id2label[k]).upper(): probs[int(k)] for k in self._id2label}
 
         malicious_prob = label_to_prob.get("MALICIOUS", label_to_prob.get("LABEL_1", 0.0))
-        benign_prob = label_to_prob.get("BENIGN", label_to_prob.get("LABEL_0", 1.0 - malicious_prob))
+        benign_prob = label_to_prob.get(
+            "BENIGN", label_to_prob.get("LABEL_0", 1.0 - malicious_prob)
+        )
         label = "malicious" if malicious_prob >= 0.5 else "benign"
 
         return {

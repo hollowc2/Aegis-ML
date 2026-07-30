@@ -28,6 +28,7 @@ from app.models.database import init_db
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
 
+
 def _configure_logging(level: str) -> None:
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
@@ -45,6 +46,7 @@ logger = logging.getLogger(__name__)
 
 
 # ── App lifespan ──────────────────────────────────────────────────────────────
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -92,6 +94,7 @@ def _load_classifier(settings):
     """Load the appropriate classifier based on CLASSIFIER_TYPE."""
     if settings.classifier_type == "sklearn":
         from app.classifiers.sklearn_classifier import SklearnClassifier
+
         clf = SklearnClassifier(model_path=settings.sklearn_model_path)
         try:
             clf.load()
@@ -107,6 +110,7 @@ def _load_classifier(settings):
 
     elif settings.classifier_type == "hf":
         from app.classifiers.hf_classifier import HFClassifier
+
         clf = HFClassifier(model_path=settings.hf_model_path)
         try:
             clf.load()
@@ -120,21 +124,21 @@ def _load_classifier(settings):
 
     elif settings.classifier_type == "onnx":
         from app.classifiers.onnx_classifier import ONNXClassifier
+
         clf = ONNXClassifier(model_path=settings.onnx_model_path)
         try:
             clf.load()
         except (FileNotFoundError, ImportError) as exc:
             logger.warning(
-                "ONNX model not loaded (%s). "
-                "Run: python -m training.phase2_hf.export_onnx",
+                "ONNX model not loaded (%s). Run: python -m training.phase2_hf.export_onnx",
                 exc,
             )
         return clf
 
     elif settings.classifier_type == "cascade":
-        from app.classifiers.sklearn_classifier import SklearnClassifier
-        from app.classifiers.onnx_classifier import ONNXClassifier
         from app.classifiers.cascade_classifier import CascadeClassifier
+        from app.classifiers.onnx_classifier import ONNXClassifier
+        from app.classifiers.sklearn_classifier import SklearnClassifier
 
         sklearn_clf = SklearnClassifier(model_path=settings.sklearn_model_path)
         onnx_clf = ONNXClassifier(model_path=settings.onnx_model_path)
@@ -171,19 +175,20 @@ def _load_classifier(settings):
 
     elif settings.classifier_type == "hf2":
         from app.classifiers.hf2_classifier import HF2Classifier
+
         clf = HF2Classifier(model_path=settings.hf2_model_path)
         try:
             clf.load()
         except (FileNotFoundError, RuntimeError) as exc:
             logger.warning(
-                "HF2 model not loaded (%s). "
-                "Run: python -m training.phase3_hf2.train",
+                "HF2 model not loaded (%s). Run: python -m training.phase3_hf2.train",
                 exc,
             )
         return clf
 
     elif settings.classifier_type == "onnx2":
         from app.classifiers.onnx2_classifier import ONNX2Classifier
+
         clf = ONNX2Classifier(
             model_path=settings.onnx2_model_path,
             use_int8=settings.onnx2_use_int8,
@@ -192,16 +197,15 @@ def _load_classifier(settings):
             clf.load()
         except (FileNotFoundError, ImportError) as exc:
             logger.warning(
-                "ONNX2 model not loaded (%s). "
-                "Run: python -m training.phase3_hf2.export_onnx",
+                "ONNX2 model not loaded (%s). Run: python -m training.phase3_hf2.export_onnx",
                 exc,
             )
         return clf
 
     elif settings.classifier_type == "cascade2":
-        from app.classifiers.sklearn_classifier import SklearnClassifier
-        from app.classifiers.onnx2_classifier import ONNX2Classifier
         from app.classifiers.cascade_classifier import CascadeClassifier
+        from app.classifiers.onnx2_classifier import ONNX2Classifier
+        from app.classifiers.sklearn_classifier import SklearnClassifier
 
         sklearn_clf = SklearnClassifier(model_path=settings.sklearn_model_path)
         onnx2_clf = ONNX2Classifier(
@@ -249,10 +253,9 @@ def _load_classifier(settings):
 
 # ── App factory ───────────────────────────────────────────────────────────────
 
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
-    settings = get_settings()
-
     app = FastAPI(
         title="Aegis-ML — LLM Firewall",
         description=(
@@ -291,6 +294,7 @@ app = create_app()
 
 
 # ── CLI entry point ───────────────────────────────────────────────────────────
+
 
 def run() -> None:
     """Called by the 'aegis-serve' CLI script defined in pyproject.toml."""

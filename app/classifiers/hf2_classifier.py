@@ -76,23 +76,21 @@ class HF2Classifier:
             torch.isfinite(t)
             return 0
         except RuntimeError as exc:
-            logger.warning(
-                "GPU detected but not functional (%s) — falling back to CPU.", exc
-            )
+            logger.warning("GPU detected but not functional (%s) — falling back to CPU.", exc)
             return -1
 
     def load(self) -> None:
         """Load the AegisMTModel.  Heavy imports deferred to here."""
         import torch
         from transformers import AutoTokenizer
-        from training.phase3_hf2.model import AegisMTModel
+
         from app.classifiers.text_preprocessor import TextPreprocessor
+        from training.phase3_hf2.model import AegisMTModel
 
         path = Path(self.model_path)
         if not path.exists():
             raise FileNotFoundError(
-                f"HF2 model not found at {path}. "
-                "Run 'python -m training.phase3_hf2.train' first."
+                f"HF2 model not found at {path}. Run 'python -m training.phase3_hf2.train' first."
             )
 
         device_id = self._probe_device(torch)
@@ -111,9 +109,7 @@ class HF2Classifier:
         self._tokenizer = AutoTokenizer.from_pretrained(str(path))
         self._preprocessor = TextPreprocessor()
         self._loaded = True
-        logger.info(
-            "HF2 classifier loaded successfully (T=%.4f).", self._temperature
-        )
+        logger.info("HF2 classifier loaded successfully (T=%.4f).", self._temperature)
 
     def is_loaded(self) -> bool:
         return self._loaded
@@ -135,7 +131,8 @@ class HF2Classifier:
         """Synchronous inference — called inside a thread pool worker."""
         import torch
         import torch.nn.functional as F
-        from training.phase3_hf2.model import ID2THREAT, THREAT_CATEGORIES
+
+        from training.phase3_hf2.model import THREAT_CATEGORIES
 
         assert self._module is not None
         assert self._tokenizer is not None

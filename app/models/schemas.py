@@ -11,18 +11,17 @@ from __future__ import annotations
 
 import time
 import uuid
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # OpenAI-Compatible Schemas
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class Role(str, Enum):
+class Role(StrEnum):
     system = "system"
     user = "user"
     assistant = "assistant"
@@ -99,7 +98,7 @@ class ChatCompletionResponse(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class ThreatCategory(str, Enum):
+class ThreatCategory(StrEnum):
     """Categories of detected threats."""
 
     prompt_injection = "prompt_injection"
@@ -111,7 +110,7 @@ class ThreatCategory(str, Enum):
     none = "none"
 
 
-class GuardrailVerdict(str, Enum):
+class GuardrailVerdict(StrEnum):
     allow = "allow"
     block = "block"
     redact = "redact"
@@ -154,7 +153,7 @@ class AuditEntry(BaseModel):
     timestamp: float = Field(default_factory=time.time)
     client_ip: str = ""
     # Input side
-    input_text: str = ""          # may be redacted per config
+    input_text: str = ""  # may be redacted per config
     input_verdict: str = "allow"
     input_confidence: float = 0.0
     input_threat: str = "none"

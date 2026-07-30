@@ -22,7 +22,6 @@ wheels/
 
 # UV
 .venv/
-uv.lock
 
 # Environment
 .env
@@ -59,9 +58,6 @@ logs/*.log
 .idea/
 *.swp
 *.swo
-
-# Docker
-.dockerignore
 
 # OS
 .DS_Store

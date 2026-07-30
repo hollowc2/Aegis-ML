@@ -14,7 +14,6 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -28,7 +27,6 @@ from app.guardrails.input_guard import run_input_guardrail
 from app.guardrails.output_guard import run_output_guardrail
 from app.models.database import get_recent_logs, log_audit_entry
 from app.models.schemas import (
-    AuditEntry,
     BlockedResponse,
     ChatCompletionRequest,
     GuardrailVerdict,
@@ -76,17 +74,17 @@ OUTPUT_BLOCKS = Counter(
 # ── Dependency helpers ────────────────────────────────────────────────────────
 
 
-def get_classifier(request: Request):
+async def get_classifier(request: Request):
     """Dependency: return the loaded classifier from app state."""
     return request.app.state.classifier
 
 
-def get_http_client(request: Request) -> httpx.AsyncClient:
+async def get_http_client(request: Request) -> httpx.AsyncClient:
     """Dependency: return the shared httpx client from app state."""
     return request.app.state.http_client
 
 
-def get_limiter(request: Request) -> Limiter:
+async def get_limiter(request: Request) -> Limiter:
     return request.app.state.limiter
 
 
@@ -110,15 +108,13 @@ async def chat_completions(
       4. Output guardrail → block / redact if needed
       5. Return cleaned response + audit log
     """
-    settings = get_settings()
     start = time.perf_counter()
     request_id = getattr(request.state, "request_id", uuid.uuid4().hex)
     client_ip = get_remote_address(request)
 
     # ── Apply rate limit ───────────────────────────────────────────────────────
     limiter: Limiter = request.app.state.limiter
-    rate_limit_str = f"{settings.rate_limit_per_minute}/minute"
-    limiter._check_request_limit(request, None, rate_limit_str)  # type: ignore[attr-defined]
+    limiter._check_request_limit(request, None)  # type: ignore[attr-defined]
 
     # ── 1. Input Guardrail ─────────────────────────────────────────────────────
     clf_start = time.perf_counter()

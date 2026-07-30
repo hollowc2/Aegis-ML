@@ -71,7 +71,7 @@ class HFClassifier:
         so the rest of the app doesn't pay the import cost when using sklearn.
         """
         import torch
-        from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer, pipeline
 
         path = Path(self.model_path)
         if not path.exists():
@@ -99,9 +99,7 @@ class HFClassifier:
                 model_kwargs["quantization_config"] = bnb_config
                 logger.info("4-bit quantisation enabled for HF inference")
             except ImportError:
-                logger.warning(
-                    "bitsandbytes not installed — 4-bit inference disabled."
-                )
+                logger.warning("bitsandbytes not installed — 4-bit inference disabled.")
 
         tokenizer = AutoTokenizer.from_pretrained(str(path))
         model = AutoModelForSequenceClassification.from_pretrained(
@@ -113,7 +111,7 @@ class HFClassifier:
             model=model,
             tokenizer=tokenizer,
             device=device,
-            top_k=None,   # Return all class scores
+            top_k=None,  # Return all class scores
             truncation=True,
             max_length=512,
         )

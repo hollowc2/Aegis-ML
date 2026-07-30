@@ -8,7 +8,7 @@ All values can be set via environment variables or a .env file.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AnyHttpUrl, Field, field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,9 +26,7 @@ class Settings(BaseSettings):
     host: str = Field(default="0.0.0.0", description="Bind host")
     port: int = Field(default=8000, ge=1, le=65535, description="Bind port")
     workers: int = Field(default=1, ge=1, description="Uvicorn worker count")
-    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
-        default="INFO"
-    )
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(default="INFO")
     redact_prompts_in_logs: bool = Field(
         default=False,
         description="Mask prompt text in audit logs (GDPR-friendly)",
@@ -47,14 +45,16 @@ class Settings(BaseSettings):
     backend_timeout: float = Field(default=120.0, ge=1.0)
 
     # ── Classifier ───────────────────────────────────────────────────────────
-    classifier_type: Literal["sklearn", "hf", "onnx", "cascade", "hf2", "onnx2", "cascade2"] = Field(
-        default="sklearn",
-        description=(
-            "Which classifier to use: 'sklearn' (Phase 1), 'hf' (Phase 2), "
-            "'onnx' (Phase 2 via ONNX Runtime), 'cascade' (sklearn + ONNX), "
-            "'hf2' (Phase 3 multi-task), 'onnx2' (Phase 3 ONNX INT8), "
-            "or 'cascade2' (sklearn fast path + ONNX2 slow path)"
-        ),
+    classifier_type: Literal["sklearn", "hf", "onnx", "cascade", "hf2", "onnx2", "cascade2"] = (
+        Field(
+            default="sklearn",
+            description=(
+                "Which classifier to use: 'sklearn' (Phase 1), 'hf' (Phase 2), "
+                "'onnx' (Phase 2 via ONNX Runtime), 'cascade' (sklearn + ONNX), "
+                "'hf2' (Phase 3 multi-task), 'onnx2' (Phase 3 ONNX INT8), "
+                "or 'cascade2' (sklearn fast path + ONNX2 slow path)"
+            ),
+        )
     )
     confidence_threshold: float = Field(
         default=0.70,

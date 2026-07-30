@@ -7,7 +7,7 @@ Startup sequence
    If missing, auto-train from public HF datasets (~60 s).
 
 2. ONNX2 model: load from models/hf2_classifier_onnx/.
-   If missing, download from the HF model repo (hollowc2/aegis-ml-classifier).
+   If missing, download from the configured HF model repo.
    If the download fails (repo not yet created, no network), the Space still
    launches with sklearn only — onnx2 falls back to keyword heuristics in the UI.
 
@@ -79,7 +79,11 @@ else:
 
 from demo.gradio_ui import build_ui  # noqa: E402
 
-demo = build_ui(onnx2_available=_onnx2_ready)
+_available_classifiers = ["sklearn"]
+if _onnx2_ready:
+    _available_classifiers.append("onnx2")
+
+demo = build_ui(available_classifiers=_available_classifiers)
 
 if __name__ == "__main__":
     demo.launch()

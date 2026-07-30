@@ -20,7 +20,6 @@ Fail-secure: any exception during classification → block the request.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import TYPE_CHECKING
 
@@ -33,8 +32,8 @@ from app.models.schemas import (
 )
 
 if TYPE_CHECKING:
-    from app.classifiers.sklearn_classifier import SklearnClassifier
     from app.classifiers.hf_classifier import HFClassifier
+    from app.classifiers.sklearn_classifier import SklearnClassifier
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +57,7 @@ def _extract_text(request: ChatCompletionRequest) -> str:
 
 async def run_input_guardrail(
     request: ChatCompletionRequest,
-    classifier: "SklearnClassifier | HFClassifier",
+    classifier: SklearnClassifier | HFClassifier,
 ) -> InputGuardrailResult:
     """
     Classify the incoming request.
@@ -99,6 +98,7 @@ async def _classify(
     if settings.enable_text_preprocessing:
         try:
             from app.classifiers.text_preprocessor import TextPreprocessor
+
             preprocessor = TextPreprocessor()
             cleaned_text, preprocess_flags = preprocessor.preprocess(text)
         except Exception as exc:
@@ -120,7 +120,8 @@ async def _classify(
         benign_prob = max(0.0, 1.0 - malicious_prob)
         logger.debug(
             "Invisible-char bias applied (+%.2f): malicious_prob → %.4f",
-            bias, malicious_prob,
+            bias,
+            malicious_prob,
         )
 
     is_malicious = malicious_prob >= threshold

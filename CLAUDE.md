@@ -79,7 +79,7 @@ Every `POST /v1/chat/completions` request flows through:
 | `app/guardrails/input_guard.py` | Orchestrates classification; extracts text from all messages including role labels |
 | `app/guardrails/canary.py` | Token generation, injection, one-time consumption, 5-min TTL store |
 | `app/guardrails/output_guard.py` | Canary leak detection, PII redaction, harmful content filter |
-| `app/classifiers/` | Four classifier implementations: sklearn, hf, onnx, cascade |
+| `app/classifiers/` | Phase 1/2/3 classifiers plus ONNX and cascade variants |
 | `app/proxy/llm_proxy.py` | Canary injection into forwarded request, response content extraction/patching |
 | `app/api/routes.py` | FastAPI routes: `/v1/chat/completions`, `/health`, `/metrics`, `/audit/logs` |
 | `app/models/database.py` | Async SQLite via aiosqlite; single `audit_log` table |
@@ -88,8 +88,11 @@ Every `POST /v1/chat/completions` request flows through:
 
 - `sklearn` — TF-IDF + Logistic Regression, <1 ms, ~50 MB RAM (Phase 1, default)
 - `hf` — Fine-tuned DistilBERT/DeBERTa-v3-small, 5–15 ms, ~400 MB RAM (Phase 2)
-- `onnx` — ONNX Runtime inference of the HF model, faster than PyTorch in production
-- `cascade` — sklearn fast-path for high-confidence cases, ONNX slow-path for uncertainty
+- `onnx` — ONNX Runtime inference of the Phase 2 model
+- `cascade` — sklearn fast-path with Phase 2 ONNX escalation
+- `hf2` — Phase 3 multi-task DeBERTa model with threat categories
+- `onnx2` — INT8-capable ONNX inference for Phase 3
+- `cascade2` — sklearn fast-path with Phase 3 ONNX escalation
 
 All classifiers expose the same async interface and are loaded once at startup. The sklearn classifier wraps synchronous inference in `asyncio.to_thread()` to avoid blocking the event loop.
 
@@ -99,7 +102,10 @@ The in-memory canary store is **single-process only**. Multi-process or distribu
 
 ### Trained Model Artifacts
 
-Trained models are stored under `models/` (gitignored). The sklearn classifier must be trained before the service can start with `CLASSIFIER_TYPE=sklearn`. The Phase 1 training pipeline downloads datasets from HuggingFace Hub.
+Trained models are stored under `models/`. Large transformer artifacts are
+gitignored; the small sklearn classifier is bundled so the default service and
+demo can start without training. The Phase 1 training pipeline downloads
+datasets from HuggingFace Hub.
 
 ## Configuration
 
@@ -112,7 +118,7 @@ All settings live in `.env` (copy from `.env.example`). Key settings:
 | `BACKEND_URL` | `http://localhost:8080` | llama.cpp / LLM endpoint |
 | `RATE_LIMIT_PER_MINUTE` | `60` | Per-IP rate cap |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./logs/audit.db` | Audit log location |
-| `REDACT_PROMPTS` | `false` | Omit input text from audit log (GDPR) |
+| `REDACT_PROMPTS_IN_LOGS` | `false` | Omit input text from audit log |
 
 ## Prometheus Metrics
 

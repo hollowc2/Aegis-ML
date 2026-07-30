@@ -8,35 +8,52 @@ version = "1.0.0"
 description = "Adversarial Prompt Injection Detector Microservice — LLM Firewall / Guardrails Service"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
-license = { text = "MIT" }
-authors = [{ name = "Aegis-ML" }]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Aegis-ML contributors" }]
 keywords = ["llm", "security", "guardrails", "prompt-injection", "firewall"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: FastAPI",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+]
 
 dependencies = [
     # Web framework
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.32.0",
-    "httpx>=0.28.0",
+    "fastapi>=0.115.0,<0.116.0",
+    "uvicorn[standard]>=0.32.0,<1.0.0",
+    "httpx>=0.28.0,<1.0.0",
     # Config + validation
-    "pydantic>=2.10.0",
-    "pydantic-settings>=2.7.0",
+    "pydantic>=2.10.0,<3.0.0",
+    "pydantic-settings>=2.7.0,<3.0.0",
     # Rate limiting
     "slowapi>=0.1.9",
     # Database
-    "aiosqlite>=0.20.0",
+    "aiosqlite>=0.20.0,<0.22.0",
     # ML — Phase 1 (always installed, lightweight)
-    "scikit-learn>=1.6.0",
-    "joblib>=1.4.0",
-    "numpy>=1.26.0",
-    "pandas>=2.2.0",
+    # joblib artifacts are not portable across sklearn releases.
+    "scikit-learn==1.8.0",
+    "joblib>=1.4.0,<2.0.0",
+    "numpy>=1.26.0,<3.0.0",
+    "pandas>=2.2.0,<3.0.0",
     # Prometheus metrics
     "prometheus-client>=0.21.0",
     # Gradio demo UI
-    "gradio>=5.0.0",
+    "gradio>=5.23.0,<6.0.0",
     # HuggingFace datasets (for training data download)
-    "datasets>=3.2.0",
-    "onnxscript>=0.6.2",
+    "datasets>=3.2.0,<4.0.0",
+    "onnxscript>=0.6.2,<1.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/hollowc2/Aegis-ML"
+Repository = "https://github.com/hollowc2/Aegis-ML"
+Demo = "https://huggingface.co/spaces/billybitcoin/aegis-ml"
+Issues = "https://github.com/hollowc2/Aegis-ML/issues"
 
 [project.optional-dependencies]
 # Phase 2 — HF fine-tuning (heavier, GPU required)
@@ -74,8 +91,8 @@ hf2 = [
 ]
 # Development + testing
 dev = [
-    "pytest>=8.3.0",
-    "pytest-asyncio>=0.25.0",
+    "pytest>=8.3.0,<9.0.0",
+    "pytest-asyncio>=0.25.0,<1.0.0",
     "httpx>=0.28.0",
     "pytest-cov>=6.0.0",
     "ruff>=0.8.0",
@@ -103,7 +120,10 @@ packages = ["app", "demo", "training"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501", "N812"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -113,6 +133,15 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = ["--strict-markers"]
+
+[tool.coverage.run]
+branch = true
+source = ["app", "demo"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
 
 # ── AMD ROCm GPU support ───────────────────────────────────────────────────────
 # Pulls torch from the ROCm 7.2 index instead of the default CUDA wheel on PyPI.
@@ -125,4 +154,3 @@ explicit = true
 [tool.uv.sources]
 torch = [{ index = "pytorch-rocm72" }]
 triton-rocm = [{ index = "pytorch-rocm72" }]
-

@@ -77,6 +77,7 @@ class ONNX2Classifier:
             ) from exc
 
         from transformers import AutoTokenizer
+
         from app.classifiers.text_preprocessor import TextPreprocessor
 
         path = Path(self.model_path)
@@ -92,8 +93,7 @@ class ONNX2Classifier:
             force_cpu = False
         else:
             raise FileNotFoundError(
-                f"ONNX model not found in {path}. "
-                "Run: python -m training.phase3_hf2.export_onnx"
+                f"ONNX model not found in {path}. Run: python -m training.phase3_hf2.export_onnx"
             )
 
         # Provider selection — INT8 only works on CPU
@@ -136,13 +136,16 @@ class ONNX2Classifier:
         if not self._threat_categories:
             # Fallback to default order
             from training.phase3_hf2.model import THREAT_CATEGORIES
+
             self._threat_categories = THREAT_CATEGORIES
 
         self._preprocessor = TextPreprocessor()
         self._loaded = True
         logger.info(
             "ONNX2 classifier loaded (provider=%s, T=%.4f, int8=%s).",
-            provider, self._temperature, force_cpu,
+            provider,
+            self._temperature,
+            force_cpu,
         )
 
     def is_loaded(self) -> bool:
@@ -158,7 +161,6 @@ class ONNX2Classifier:
 
     def _predict_sync(self, text: str) -> dict[str, Any]:
         """Synchronous ORT inference — called inside a thread pool worker."""
-        import numpy as np
         from scipy.special import softmax
 
         assert self._session is not None and self._tokenizer is not None
@@ -182,8 +184,10 @@ class ONNX2Classifier:
 
         # Parse outputs by name
         output_map = dict(zip(self._output_names, outputs))
-        binary_logits = output_map.get("binary_logits", outputs[0])[0]   # (2,)
-        threat_logits = output_map.get("threat_logits", outputs[1] if len(outputs) > 1 else outputs[0])[0]
+        binary_logits = output_map.get("binary_logits", outputs[0])[0]  # (2,)
+        threat_logits = output_map.get(
+            "threat_logits", outputs[1] if len(outputs) > 1 else outputs[0]
+        )[0]
 
         # Apply temperature scaling to binary logits
         binary_probs = softmax(binary_logits / self._temperature).tolist()

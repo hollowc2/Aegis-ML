@@ -48,9 +48,7 @@ _PII_PATTERNS: list[tuple[str, re.Pattern, str]] = [
     ),
     (
         "IPv4",
-        re.compile(
-            r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b"
-        ),
+        re.compile(r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b"),
         "[IP REDACTED]",
     ),
     (
@@ -116,9 +114,7 @@ async def _check(content: str, request_id: str) -> OutputGuardrailResult:
     # 2. PII detection + redaction
     redacted_content, pii_found = _redact_pii(content)
     if pii_found:
-        logger.warning(
-            "PII detected in LLM output for request %s — redacting", request_id
-        )
+        logger.warning("PII detected in LLM output for request %s — redacting", request_id)
         return OutputGuardrailResult(
             verdict=GuardrailVerdict.redact,
             is_safe=True,  # Allow through but with redacted content

@@ -101,9 +101,7 @@ def inject_into_system_prompt(messages: list[dict], canary_token: str) -> list[d
 
     for msg in messages:
         if msg.get("role") == "system" and not system_injected:
-            new_messages.append(
-                {**msg, "content": msg["content"] + canary_instruction}
-            )
+            new_messages.append({**msg, "content": msg["content"] + canary_instruction})
             system_injected = True
         else:
             new_messages.append(msg)

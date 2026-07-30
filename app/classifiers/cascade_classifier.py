@@ -22,7 +22,6 @@ Predict return dict is identical to individual classifiers plus a diagnostic
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
 
@@ -77,9 +76,7 @@ class CascadeClassifier:
             }
         """
         if not self.is_loaded():
-            raise RuntimeError(
-                "CascadeClassifier: one or both classifiers are not loaded."
-            )
+            raise RuntimeError("CascadeClassifier: one or both classifiers are not loaded.")
 
         # ── Stage 1: fast sklearn check ────────────────────────────────────────
         sk_result = await self.sklearn_clf.predict(text)

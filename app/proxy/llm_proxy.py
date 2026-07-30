@@ -10,7 +10,6 @@ the request but before it is forwarded.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -73,7 +72,9 @@ async def forward_to_backend(
     response.raise_for_status()
 
     data: dict[str, Any] = response.json()
-    logger.debug("Backend responded with status %d for request %s", response.status_code, request_id)
+    logger.debug(
+        "Backend responded with status %d for request %s", response.status_code, request_id
+    )
     return data
 
 
@@ -98,6 +99,7 @@ def patch_response_content(response_data: dict[str, Any], new_content: str) -> d
     Used by the output guardrail to swap in redacted content.
     """
     import copy
+
     patched = copy.deepcopy(response_data)
     try:
         patched["choices"][0]["message"]["content"] = new_content

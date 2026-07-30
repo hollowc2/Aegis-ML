@@ -28,8 +28,12 @@ COPY --from=uv-base /uvx /usr/local/bin/uvx
 
 WORKDIR /build
 
-# Copy only dependency files first (layer cache optimisation)
-COPY pyproject.toml ./
+# Copy the locked project definition and package sources. Hatchling needs the
+# package directories plus README/license metadata to build the project.
+COPY pyproject.toml uv.lock README.md LICENSE ./
+COPY app/ ./app/
+COPY demo/ ./demo/
+COPY training/ ./training/
 
 # Which optional extras to install (default: base only; override with --build-arg EXTRAS=hf)
 ARG EXTRAS=""
@@ -38,11 +42,11 @@ ARG EXTRAS=""
 # --mount=type=cache speeds up repeated builds by caching the UV download cache
 RUN --mount=type=cache,target=/root/.cache/uv \
     if [ -z "$EXTRAS" ]; then \
-        uv venv /app/.venv && \
-        uv pip install --python /app/.venv/bin/python .; \
+        UV_PROJECT_ENVIRONMENT=/app/.venv uv sync \
+            --frozen --no-dev --no-editable; \
     else \
-        uv venv /app/.venv && \
-        uv pip install --python /app/.venv/bin/python ".[$EXTRAS]"; \
+        UV_PROJECT_ENVIRONMENT=/app/.venv uv sync \
+            --frozen --no-dev --no-editable --extra "$EXTRAS"; \
     fi
 
 # ── Stage 3: Final slim runtime image ─────────────────────────────────────────
@@ -66,6 +70,7 @@ COPY --chown=aegis:aegis app/ ./app/
 COPY --chown=aegis:aegis demo/ ./demo/
 COPY --chown=aegis:aegis training/ ./training/
 COPY --chown=aegis:aegis pyproject.toml ./
+COPY --chown=aegis:aegis models/sklearn_classifier.joblib ./models/sklearn_classifier.joblib
 
 # Create required directories
 RUN mkdir -p /app/models /app/logs /app/data && \
