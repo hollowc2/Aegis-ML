@@ -1,13 +1,13 @@
 # Benchmark notes
 
 This document separates reproduced measurements from design targets. It exists
-to make the portfolio claims auditable and to prevent placeholder notebook
+to make the published claims auditable and to prevent placeholder notebook
 values from being presented as model results.
 
 ## Reproduced baseline
 
 The Phase 1 scikit-learn evaluation was reproduced from the committed model and
-dataset during the portfolio-polish pass:
+dataset:
 
 | Metric | Recorded value |
 |---|---:|
