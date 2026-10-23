@@ -1,4 +1,4 @@
-"""Focused tests for portfolio-demo behavior."""
+"""Focused tests for demo behavior."""
 
 from unittest.mock import patch
 

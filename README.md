@@ -47,18 +47,41 @@ Client ← audit log ← output filtering ← canary check
 Clients use the familiar `POST /v1/chat/completions` interface and change only
 their base URL. A blocked input never reaches the backend model.
 
-## What it demonstrates
+## Features
 
-- **Layered security:** ML input classification, canary leak detection, PII
-  redaction, harmful-output filtering, and fail-secure behavior.
-- **Production-oriented Python:** FastAPI, async HTTP forwarding, Pydantic
-  configuration, SQLite audit logs, Prometheus metrics, and rate limiting.
-- **An end-to-end ML lifecycle:** deduplicated, leakage-checked dataset
-  building, baseline training, transformer fine-tuning, validation-tuned
-  thresholds, multi-task classification, INT8 ONNX export, and evaluation on
-  an external benchmark the models never see during training.
-- **Operational packaging:** locked dependencies, Docker, Compose, automated
-  tests, linting, and a hosted Gradio demonstration.
+- **Drop-in proxy:** speaks `POST /v1/chat/completions`, so any OpenAI SDK,
+  llama.cpp, vLLM, or Ollama setup works by changing the base URL.
+- **Layered defenses:** ML input classification, per-request canary tokens to
+  catch system-prompt leaks, PII redaction, and harmful-output filtering.
+- **Fails closed:** classifier errors block the request; backend failures return
+  `502` instead of passing through unchecked output.
+- **Observable:** every allow/block decision goes to a SQLite audit log, with
+  Prometheus metrics and per-IP rate limiting.
+- **Pick your speed/accuracy trade-off:** a ~1.5 ms CPU baseline ships in the
+  repo; DeBERTa classifiers and an sklearn → ONNX cascade are optional, with the
+  full training, evaluation, and INT8 export pipeline included.
+- **Easy to run:** locked dependencies, Docker, Compose, and a hosted demo.
+
+## How is this different?
+
+Other prompt-injection tools exist, and Aegis does not claim to beat them as a
+classifier. The difference is where it sits and what it does around the
+classifier:
+
+- **[Llama Prompt Guard](https://huggingface.co/meta-llama/Llama-Prompt-Guard-2-86M)**
+  is a classifier model. You still have to wire it into your app, decide what
+  happens on a block, and log the result. Aegis is that wiring, as a service.
+- **[LLM Guard](https://github.com/protectai/llm-guard)** offers a broader set
+  of input/output scanners that you call from your application (the repository
+  is now archived). Aegis has fewer scanners but is a transparent pass-through
+  proxy, so the app needs no code changes.
+- **[Rebuff](https://github.com/protectai/rebuff)** also layers detection with
+  canary tokens, through an SDK inside your app (archived since 2024). Aegis
+  does the canary check outside the app, next to the audit log, so a
+  compromised or careless client can't skip it.
+
+If you already use one of these, Aegis can still be the enforcement and logging
+point in front of your model.
 
 ## See it in 30 seconds
 
@@ -270,7 +293,7 @@ docker compose up --build
 
 ```text
 app/                  FastAPI service, classifiers, guardrails, proxy, database
-demo/                 Gradio portfolio demo
+demo/                 Gradio demo
 training/             Dataset, training, evaluation, and ONNX export pipelines
 tests/                Unit, integration, preprocessing, and adversarial tests
 notebooks/            Recorded baseline analysis and generated plots

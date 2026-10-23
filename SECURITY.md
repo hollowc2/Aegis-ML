@@ -1,6 +1,6 @@
 # Security policy
 
-Aegis-ML is a portfolio and research project, not a guarantee that arbitrary
+Aegis-ML is a defense-in-depth layer, not a guarantee that arbitrary
 LLM traffic is safe. Review the documented trust boundaries and limitations in
 [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) before deployment.
 
