@@ -39,9 +39,9 @@ class CascadeClassifier:
     Parameters
     ----------
     sklearn_clf    : SklearnClassifier
-        Fast first-stage classifier (~0.3 ms/sample).
+        Fast first-stage classifier (~1.5 ms/request).
     slow_clf       : ONNXClassifier | HFClassifier
-        Accurate slow-path classifier (~3-15 ms/sample).
+        Accurate slow-path classifier (~18 ms on GPU, ~40 ms INT8 on CPU).
     low_threshold  : float
         sklearn malicious_prob ≤ this → benign fast path (default 0.05).
     high_threshold : float

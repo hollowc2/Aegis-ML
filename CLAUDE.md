@@ -109,8 +109,8 @@ Every `POST /v1/chat/completions` request flows through:
 - `hf` — Fine-tuned DistilBERT/DeBERTa-v3-small, 5–15 ms, ~400 MB RAM (Phase 2)
 - `onnx` — ONNX Runtime inference of the Phase 2 model
 - `cascade` — sklearn fast-path with Phase 2 ONNX escalation
-- `hf2` — Phase 3 multi-task mDeBERTa-v3 model with threat categories
-- `onnx2` — INT8-capable ONNX inference for Phase 3
+- `hf2` — Phase 3 multi-task mDeBERTa-v3 model with threat categories, ~18 ms on GPU
+- `onnx2` — INT8-capable ONNX inference for Phase 3 (INT8 ~40 ms p50 on 4 CPU threads, ~5 points lower recall than FP32)
 - `cascade2` — sklearn fast-path with Phase 3 ONNX escalation; sklearn scores inside `CASCADE_SK_LOW/HIGH_THRESHOLD` are decided by the ONNX model alone, using its threshold
 
 All classifiers expose the same async interface and are loaded once at startup. The sklearn classifier wraps synchronous inference in `asyncio.to_thread()` to avoid blocking the event loop.

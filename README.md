@@ -53,9 +53,10 @@ their base URL. A blocked input never reaches the backend model.
   redaction, harmful-output filtering, and fail-secure behavior.
 - **Production-oriented Python:** FastAPI, async HTTP forwarding, Pydantic
   configuration, SQLite audit logs, Prometheus metrics, and rate limiting.
-- **An end-to-end ML lifecycle:** dataset preparation, baseline training,
-  transformer fine-tuning, threshold analysis, multi-task classification, and
-  INT8 ONNX export.
+- **An end-to-end ML lifecycle:** deduplicated, leakage-checked dataset
+  building, baseline training, transformer fine-tuning, validation-tuned
+  thresholds, multi-task classification, INT8 ONNX export, and evaluation on
+  an external benchmark the models never see during training.
 - **Operational packaging:** locked dependencies, Docker, Compose, automated
   tests, linting, and a hosted Gradio demonstration.
 
@@ -101,19 +102,29 @@ limitations.
 | Phase 1 | TF-IDF + logistic regression | Lightweight baseline and fast path | Bundled |
 | Phase 2 | DistilBERT or DeBERTa-v3-small | Semantic binary classification | Train/export separately |
 | Phase 3 | Multi-task mDeBERTa-v3-base (multilingual) | Binary verdict plus 7 threat categories | Train/export separately |
-| Cascade | sklearn → ONNX | Escalate ambiguous prompts to a neural model | Requires ONNX artifact |
+| Cascade | sklearn → ONNX | Escalate ambiguous prompts (~24%) to a neural model | Requires ONNX artifact |
 
 On the external benchmark — 7,435 prompts from five public datasets' test
 splits, never trained or tuned on — at thresholds chosen on validation data
 for ≤2% false positives:
 
-| Model | Recall | FPR | ROC-AUC |
-|---|---:|---:|---:|
-| Previous release (v1 sklearn, 0.70) | 70.5% | 6.3% | 0.928 |
-| Phase 1 sklearn (bundled) | 91.9% | 1.8% | 0.985 |
-| Phase 3 mDeBERTa | 93.4% | 1.3% | 0.987 |
-| cascade2 (sklearn → mDeBERTa FP32) | 93.5% | 1.2% | 0.985 |
-| cascade2 (sklearn → ONNX INT8, CPU) | 89.8% | 0.9% | 0.983 |
+| Model | Recall | FPR | ROC-AUC | Latency (p50) |
+|---|---:|---:|---:|---:|
+| Previous release (v1 sklearn, 0.70) | 70.5% | 6.3% | 0.928 | — |
+| Phase 1 sklearn (bundled) | 91.9% | 1.8% | 0.985 | 1.4 ms (CPU) |
+| Phase 3 mDeBERTa | 93.4% | 1.3% | 0.987 | 18 ms (GPU) |
+| Phase 3 ONNX INT8 | 88.5% | 1.0% | 0.978 | 39 ms (CPU) |
+| cascade2 (sklearn → mDeBERTa FP32) | 93.5% | 1.2% | 0.985 | — |
+| cascade2 (sklearn → ONNX INT8, CPU) | 89.8% | 0.9% | 0.983 | 2.0 ms (p95 67 ms) |
+
+Compared with the previous release, the bundled sklearn model catches about
+21 more attacks per 100 and wrongly blocks roughly 3.5× fewer benign prompts.
+The transformer adds a couple of points of recall and is much stronger on
+multilingual and obfuscated attacks; the cascade keeps that accuracy while
+sending only the ~24% of prompts sklearn is unsure about to it. INT8 shrinks
+the ONNX graph from 1.1 GB to 323 MB at a cost of about 5 points of recall —
+set `ONNX2_USE_INT8=false` when accuracy matters more than memory. Latency is
+single-request on a Ryzen 7 1700 (4 threads) / RX 7700 XT.
 
 The previous release's published 0.998 AUC came from a random split of a
 dataset with heavy near-duplication; the rebuilt dataset is deduplicated,

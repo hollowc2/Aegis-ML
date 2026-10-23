@@ -30,7 +30,13 @@ sensitive data.
 ## Known limitations
 
 - No classifier detects every direct, indirect, encoded, multilingual, or
-  multi-turn injection.
+  multi-turn injection. On the external benchmark the bundled classifier
+  misses about 8% of attacks at a 1.8% false-positive rate (the transformer
+  about 7% at 1.3%). On hand-written out-of-distribution attacks recall is far
+  lower: indirect injection hidden in documents or tool output, data
+  exfiltration requests, and attacks buried in long benign text are caught
+  0–33% of the time. Benign prompts that discuss security or prompt injection
+  are blocked 10–38% of the time. See [BENCHMARKS.md](BENCHMARKS.md).
 - Canary detection proves only that the exact token leaked. Its absence does not
   prove that the model followed its intended instructions.
 - Regex-based PII detection is incomplete and can both miss and over-redact.
