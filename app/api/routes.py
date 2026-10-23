@@ -17,7 +17,7 @@ import uuid
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -259,10 +259,7 @@ async def health(request: Request):
 @router.get("/metrics")
 async def metrics():
     """Prometheus text metrics endpoint."""
-    return JSONResponse(
-        content=generate_latest().decode("utf-8"),
-        media_type=CONTENT_TYPE_LATEST,
-    )
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @router.get("/audit/logs")

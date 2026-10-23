@@ -223,7 +223,10 @@ class TestMetricsEndpoint:
             resp = await client.get("/metrics")
 
         assert resp.status_code == 200
-        assert "aegis_" in resp.text or "python_" in resp.text
+        assert resp.headers["content-type"].startswith("text/plain")
+        # Raw exposition text, not a JSON-encoded string
+        assert resp.text.startswith("# HELP")
+        assert "\n# TYPE aegis_requests_total counter\n" in resp.text
 
 
 class TestRateLimiting:

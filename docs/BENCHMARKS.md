@@ -26,6 +26,13 @@ ROC-AUC on the external set: v1 0.928 · sklearn 0.985 · mDeBERTa 0.987 · ONNX
 
 **INT8 trade-off.** Dynamic INT8 cuts the graph from 1.1 GB to 323 MB and runs on any CPU, but costs about 5 points of external recall at the same FPR budget. Use FP32 ONNX (`ONNX2_USE_INT8=false`) when accuracy matters more than memory. The cascade sends only uncertain prompts to the transformer and keeps the transformer's accuracy.
 
+INT8 scores also vary a little between machines. The same INT8 graph on the
+Hugging Face Space (different CPU) matched local scores to a median of 0.003
+on 240 prompts, but 5% of prompts moved by more than 0.1, and 3% flipped
+verdict near the 0.27 threshold (in both directions). The sklearn and FP32
+paths matched exactly. Re-check the INT8 threshold on the hardware you deploy
+to if you serve INT8.
+
 † The v1 test row is on the new grouped test split, which the v1 model may
 have partially trained on under the old random split; it is not a clean
 number. The v1 model's previously published 0.9982 AUC / 0.31% FPR came from a
