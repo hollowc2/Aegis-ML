@@ -112,6 +112,8 @@ class ONNX2Classifier:
         logger.info("Loading ONNX2 classifier from %s using %s", onnx_file, provider)
 
         sess_opts = ort.SessionOptions()
+        sess_opts.intra_op_num_threads = 4
+        sess_opts.inter_op_num_threads = 1
         sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         self._session = ort.InferenceSession(
             str(onnx_file),

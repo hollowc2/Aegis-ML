@@ -156,6 +156,14 @@ out-of-distribution attacks (indirect injection, exfiltration, attacks buried
 in long text) remain much harder — full methodology, per-category results and
 caveats are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
+The targeted retraining experiment was rejected: sklearn external FPR rose
+from 1.85% to 2.91% (limit 2%), so the bundled baseline was restored and
+transformer retraining was halted. On the frozen targeted set, indirect recall
+rose from 1.8% to 14.0% and exfiltration from 2.0% to 21.1%, but buried recall
+stayed at 0% and security-topic FPR worsened from 17% to 23%. The table above
+continues to describe the retained baseline models. See the
+[failed experiment, before/after results and licences](docs/BENCHMARKS.md#targeted-experiment-rejected-2026-10-22).
+
 ## Quick start
 
 ### Requirements

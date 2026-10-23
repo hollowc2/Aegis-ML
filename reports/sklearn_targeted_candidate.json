@@ -1,0 +1,428 @@
+{
+  "model": "sklearn",
+  "threshold": 0.48513361631912105,
+  "dataset": {
+    "path": "data/combined_dataset.csv",
+    "sha256_16": "a68869d92a3e6dd1",
+    "rows": 22550
+  },
+  "sets": {
+    "test": {
+      "n": 2127,
+      "n_malicious": 1169,
+      "n_benign": 958,
+      "recall": 0.7904191616766467,
+      "fpr": 0.020876826722338204,
+      "precision": 0.9788135593220338,
+      "f1": 0.8745858968291529,
+      "roc_auc": 0.972552062591191,
+      "ms_per_example_batched": 1.5079940362009803,
+      "breakdown": {
+        "alpaca": {
+          "n": 35,
+          "fpr": 0.02857142857142857
+        },
+        "awesome_prompts": {
+          "n": 56,
+          "fpr": 0.0
+        },
+        "bipia_email_benign": {
+          "n": 39,
+          "fpr": 0.1282051282051282
+        },
+        "bipia_email_train": {
+          "n": 227,
+          "recall": 0.13777777777777778,
+          "fpr": 0.0
+        },
+        "deepset": {
+          "n": 23,
+          "recall": 0.8333333333333334,
+          "fpr": 0.0
+        },
+        "dolly": {
+          "n": 68,
+          "fpr": 0.0
+        },
+        "gandalf": {
+          "n": 79,
+          "recall": 1.0
+        },
+        "itw_jailbreak": {
+          "n": 49,
+          "recall": 0.7551020408163265
+        },
+        "itw_regular": {
+          "n": 89,
+          "fpr": 0.06741573033707865
+        },
+        "jackhhao": {
+          "n": 11,
+          "fpr": 0.09090909090909091
+        },
+        "multilingual_pi": {
+          "n": 83,
+          "recall": 0.9879518072289156
+        },
+        "oasst2": {
+          "n": 77,
+          "fpr": 0.012987012987012988
+        },
+        "oasst2_corrections": {
+          "n": 30,
+          "fpr": 0.0
+        },
+        "oasst2_followups": {
+          "n": 41,
+          "fpr": 0.0
+        },
+        "rubend18": {
+          "n": 1,
+          "recall": 1.0
+        },
+        "seed": {
+          "n": 2,
+          "recall": 1.0
+        },
+        "spml": {
+          "n": 263,
+          "recall": 0.9631336405529954,
+          "fpr": 0.08695652173913043
+        },
+        "synthetic": {
+          "n": 139,
+          "recall": 1.0,
+          "fpr": 0.0
+        },
+        "synthetic_hardneg": {
+          "n": 120,
+          "fpr": 0.0
+        },
+        "targeted_carrier_benign": {
+          "n": 40,
+          "fpr": 0.0
+        },
+        "targeted_indirect": {
+          "n": 195,
+          "recall": 0.8702290076335878,
+          "fpr": 0.0
+        },
+        "toxic_chat": {
+          "n": 104,
+          "recall": 0.6363636363636364,
+          "fpr": 0.021505376344086023
+        },
+        "xtram1": {
+          "n": 356,
+          "recall": 0.9727272727272728,
+          "fpr": 0.0
+        }
+      },
+      "sha256": "a68869d92a3e6dd11c239d62371d53ce0e236aff1b107f1bbce6cbfb2b3098d6"
+    },
+    "external": {
+      "n": 7435,
+      "n_malicious": 1041,
+      "n_benign": 6394,
+      "recall": 0.9260326609029779,
+      "fpr": 0.029089771660932125,
+      "precision": 0.8382608695652174,
+      "f1": 0.8799634869922409,
+      "roc_auc": 0.9832095230969715,
+      "ms_per_example_batched": 0.5775133564224058,
+      "breakdown": {
+        "deepset": {
+          "n": 115,
+          "recall": 0.576271186440678,
+          "fpr": 0.07142857142857142
+        },
+        "gandalf": {
+          "n": 112,
+          "recall": 0.9821428571428571
+        },
+        "jackhhao": {
+          "n": 259,
+          "recall": 0.875,
+          "fpr": 0.032520325203252036
+        },
+        "toxic_chat": {
+          "n": 4902,
+          "recall": 0.8160919540229885,
+          "fpr": 0.03509865005192108
+        },
+        "xtram1": {
+          "n": 2047,
+          "recall": 0.973724884080371,
+          "fpr": 0.0064285714285714285
+        }
+      },
+      "sha256": "580e5a966bf72cd0387c3f4600c296f42ec94fd605740da05a2148b787ac6474"
+    },
+    "holdout": {
+      "n": 190,
+      "n_malicious": 102,
+      "n_benign": 88,
+      "recall": 0.5098039215686274,
+      "fpr": 0.11363636363636363,
+      "precision": 0.8387096774193549,
+      "f1": 0.6341463414634145,
+      "roc_auc": 0.8064282531194296,
+      "ms_per_example_batched": 0.360110352630727,
+      "breakdown": {
+        "benign_code": {
+          "n": 12,
+          "fpr": 0.25
+        },
+        "benign_creative": {
+          "n": 8,
+          "fpr": 0.0
+        },
+        "benign_long_document": {
+          "n": 12,
+          "fpr": 0.0
+        },
+        "benign_meta_discussion": {
+          "n": 8,
+          "fpr": 0.25
+        },
+        "benign_multilingual": {
+          "n": 16,
+          "fpr": 0.1875
+        },
+        "benign_override_language": {
+          "n": 20,
+          "fpr": 0.1
+        },
+        "benign_structured_data": {
+          "n": 12,
+          "fpr": 0.0
+        },
+        "buried_in_long_text": {
+          "n": 8,
+          "recall": 0.0
+        },
+        "direct_paraphrase": {
+          "n": 15,
+          "recall": 0.8
+        },
+        "exfiltration": {
+          "n": 12,
+          "recall": 0.8333333333333334
+        },
+        "indirect_injection": {
+          "n": 15,
+          "recall": 0.26666666666666666
+        },
+        "multilingual": {
+          "n": 16,
+          "recall": 0.5625
+        },
+        "obfuscation": {
+          "n": 12,
+          "recall": 0.3333333333333333
+        },
+        "prompt_extraction": {
+          "n": 12,
+          "recall": 0.75
+        },
+        "roleplay_jailbreak": {
+          "n": 12,
+          "recall": 0.3333333333333333
+        }
+      },
+      "sha256": "92b929ee4ffab967860c65757044583e5c019992d65d7d1497c571a0fdd0aae1",
+      "caveat": "Already-seen diagnostic set; not blind evidence."
+    },
+    "targeted": {
+      "n": 2118,
+      "n_malicious": 1579,
+      "n_benign": 539,
+      "recall": 0.16022799240025332,
+      "fpr": 0.313543599257885,
+      "precision": 0.5995260663507109,
+      "f1": 0.2528735632183908,
+      "roc_auc": 0.5151002078533066,
+      "ms_per_example_batched": 1.6598282771489161,
+      "breakdown": {
+        "buried_attack": {
+          "n": 100,
+          "recall": 0.0
+        },
+        "data_exfiltration": {
+          "n": 644,
+          "recall": 0.2111801242236025
+        },
+        "indirect_injection": {
+          "n": 835,
+          "recall": 0.14011976047904193
+        },
+        "long_benign": {
+          "n": 100,
+          "fpr": 0.0
+        },
+        "notinject_benign": {
+          "n": 339,
+          "fpr": 0.4306784660766962
+        },
+        "security_benign": {
+          "n": 100,
+          "fpr": 0.23
+        }
+      },
+      "sha256": "e049ed098724e00357b2de19c8b465d6d7ab78a5e834965170c3009d1535c804",
+      "by_source": {
+        "authored_targeted_v1": {
+          "n": 500,
+          "recall": 0.4666666666666667,
+          "fpr": 0.115
+        },
+        "bipia_email_test": {
+          "n": 225,
+          "recall": 0.18222222222222223
+        },
+        "injecagent_dh_test": {
+          "n": 510,
+          "recall": 0.029411764705882353
+        },
+        "injecagent_ds_test": {
+          "n": 544,
+          "recall": 0.10477941176470588
+        },
+        "notinject_one": {
+          "n": 113,
+          "fpr": 0.3274336283185841
+        },
+        "notinject_three": {
+          "n": 113,
+          "fpr": 0.5752212389380531
+        },
+        "notinject_two": {
+          "n": 113,
+          "fpr": 0.3893805309734513
+        }
+      }
+    },
+    "adversarial": {
+      "n": 320,
+      "n_malicious": 280,
+      "n_benign": 40,
+      "recall": 0.9464285714285714,
+      "fpr": 0.05,
+      "precision": 0.9925093632958801,
+      "f1": 0.9689213893967094,
+      "roc_auc": 0.9883035714285715,
+      "ms_per_example_batched": 0.2887879968739071,
+      "breakdown": {
+        "base64_encoded": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "benign_context_manipulation": {
+          "n": 20,
+          "fpr": 0.05
+        },
+        "benign_security_hard_negative": {
+          "n": 20,
+          "fpr": 0.05
+        },
+        "code_block_injection": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "continuation_attack": {
+          "n": 20,
+          "recall": 0.95
+        },
+        "indirect_injection": {
+          "n": 20,
+          "recall": 0.95
+        },
+        "invisible_char_injection": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "many_shot_jailbreak": {
+          "n": 20,
+          "recall": 0.85
+        },
+        "multilingual_evasion": {
+          "n": 20,
+          "recall": 0.95
+        },
+        "nested_role_confusion": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "paraphrase_attack": {
+          "n": 20,
+          "recall": 0.9
+        },
+        "structured_data_injection": {
+          "n": 20,
+          "recall": 0.95
+        },
+        "sycophantic_setup": {
+          "n": 20,
+          "recall": 0.85
+        },
+        "token_smuggling": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "unicode_homoglyph": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "virtual_prompt_injection": {
+          "n": 20,
+          "recall": 0.85
+        }
+      },
+      "sha256": "e7aa54a329ee2d4f6293a850f65d28e02939d3cbd2fff652590b35f295391e63"
+    }
+  },
+  "params": {
+    "C": 16.0,
+    "char_max_features": 300000
+  },
+  "sklearn_version": "1.8.0",
+  "max_val_fpr": 0.02,
+  "leave_one_source_out": {
+    "xtram1": {
+      "n": 3805,
+      "recall@0.5": 0.7470389170896785,
+      "roc_auc": 0.9636083585496535,
+      "fpr@0.5": 0.009021512838306732
+    },
+    "spml": {
+      "n": 2289,
+      "recall@0.5": 0.3370726495726496,
+      "roc_auc": 0.8760965586505154,
+      "fpr@0.5": 0.002398081534772182
+    },
+    "gandalf": {
+      "n": 776,
+      "recall@0.5": 0.9858247422680413
+    },
+    "multilingual_pi": {
+      "n": 974,
+      "recall@0.5": 0.2813141683778234
+    },
+    "itw_jailbreak": {
+      "n": 652,
+      "recall@0.5": 0.5168711656441718
+    },
+    "deepset": {
+      "n": 250,
+      "recall@0.5": 0.245,
+      "roc_auc": 0.7611000000000001,
+      "fpr@0.5": 0.0
+    },
+    "synthetic": {
+      "n": 1287,
+      "recall@0.5": 0.7895582329317269,
+      "roc_auc": 0.9839548670873972,
+      "fpr@0.5": 0.0
+    }
+  }
+}

@@ -830,7 +830,10 @@ def generate_hard_negatives(n: int = 1500, seed: int | None = 43) -> list[dict[s
     """Generate *n* benign hard-negative examples (label 0, threat_category "none")."""
     if seed is not None:
         random.seed(seed)
-    return [{"text": _gen_hard_negative(), "label": 0, "threat_category": "none"} for _ in range(n)]
+    from training.data.targeted_gen import generate_security_negatives
+    rows = [{"text": _gen_hard_negative(), "label": 0, "threat_category": "none"} for _ in range(n)]
+    rows.extend(generate_security_negatives())
+    return rows
 
 
 # ── Public API ────────────────────────────────────────────────────────────────

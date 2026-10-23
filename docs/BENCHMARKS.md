@@ -180,3 +180,226 @@ on an AMD RX 7700 XT (ROCm 7.2, PyTorch 2.11) in about an hour; batch 16,
 gradient accumulation 2, lr 2e-5. Dataset downloads are from the Hugging Face
 Hub, so upstream changes can alter the rebuilt dataset — compare the sha256
 prefix above.
+
+
+## Targeted experiment: rejected (2026-10-22)
+
+**The candidate did not meet the acceptance criteria.** The sklearn external
+FPR rose from 1.85% to **2.91%**, exceeding the predeclared 2% budget.
+External recall rose from 91.93% to 92.60% (+0.67 percentage points), satisfying
+the recall condition alone. The validation-only selected threshold was
+0.4851336163 (C=16, 300,000 char features); the baseline's stored serving
+threshold is 0.5544. No thresholds were adjusted after evaluation.
+
+The experiment stopped at this failure as instructed. mDeBERTa was not
+retrained; ONNX export/recalibration and after-evaluation of hf2, the FP32
+cascade and INT8 were not run. Their after values are **not measured**, not
+passes. The original sklearn weights and sidecar were restored byte-for-byte;
+the transformer and ONNX weights were never replaced. The release summary
+above still describes those baseline models. The rejected sklearn weights
+are preserved locally in the session scratchpad's
+`weak_categories/rejected_candidate/`, and the original inference artifacts
+in `weak_categories/models/`. Neither models nor code were pushed.
+
+Evidence: [acceptance report](../reports/targeted_acceptance.json),
+[candidate evaluation](../reports/sklearn_targeted_candidate.json),
+[prior sklearn evaluation](../reports/sklearn_before_targeted.json), and
+[dataset summary](../reports/dataset_targeted.json). Original external reports
+for every model are also preserved as `reports/*_before_targeted.json`.
+
+### Frozen targeted evaluation
+
+`data/targeted_eval.csv` has 2,118 rows, SHA256 prefix
+`e049ed098724e003`. It was created before training-data changes and scored
+with all four original models. Only aggregate metrics were examined; no
+individual misses were inspected or used for tuning. Its manifest stores
+reserved payloads, source revisions and file hashes, and the builder refuses
+to overwrite it. Registration in `training.eval_suite.EVAL_SETS` automatically
+includes it in the dataset's evaluation-overlap exclusion.
+
+Composition: 835 indirect cases (225 BIPIA email-test constructions, 510
+InjecAgent direct-harm tool outputs, 100 authored instructions); 644
+exfiltration cases (544 InjecAgent data-stealing tool outputs, 100 authored
+instructions); 100 authored buried attacks; 100 authored security/legitimate
+correction prompts; 100 matching long benign carriers; and 339 NotInject
+benign cases. Injected tool-output exfiltration maps to `data_exfiltration`.
+These are detector scores, not end-to-end agent attack-success rates.
+
+The following baseline values are percentages. Each model has an independent
+saved report `reports/<model>_targeted_baseline.json`. All transformer/cascade/
+INT8 **after measurements were stopped**, so these are baseline evidence only.
+
+| Baseline model | Indirect recall | Exfiltration recall | Buried recall | Security benign FPR | NotInject FPR |
+|---|---:|---:|---:|---:|---:|
+| sklearn | 1.80 | 2.02 | 0.00 | 17.00 | 30.38 |
+| hf2 | 11.50 | 8.23 | 0.00 | 22.00 | 28.32 |
+| cascade2_hf2 | 10.78 | 7.92 | 0.00 | 20.00 | 27.73 |
+| onnx2_int8 | 16.05 | 4.81 | 0.00 | 10.00 | 17.40 |
+
+Sklearn before/after on the **same frozen rows**, percentages:
+
+| Category and metric | n | Before | Rejected candidate |
+|---|---:|---:|---:|
+| indirect_injection recall | 835 | 1.80 | 14.01 |
+| data_exfiltration recall | 644 | 2.02 | 21.12 |
+| buried_attack recall | 100 | 0.00 | 0.00 |
+| security_benign fpr | 100 | 17.00 | 23.00 |
+| notinject_benign fpr | 339 | 30.38 | 43.07 |
+| long_benign fpr | 100 | 0.00 | 0.00 |
+
+The new target therefore fails as a whole: indirect and exfiltration improve,
+buried attacks do not, and the security-topic FPR worsens. The mDeBERTa
+security-FPR target (<5%) has no after measurement; its baseline was 22%.
+NotInject is a broader trigger-word benchmark and is reported separately
+from security-specific benign prompts.
+
+### Long-text serving path and already-seen holdout
+
+Whole-string buried recall is 0% for all four baselines. Actual requests
+through `app.guardrails.input_guard.run_input_guardrail` also scored **0/100
+buried attacks** and **0/100 long benign false positives** for all four
+baselines, with zero classifier errors or size-limit blocks. The request
+settings were `MAX_SCAN_SEGMENTS=64` and invisible-character bias 0.15.
+These baseline guard-path results are stored under `serving_long` in each
+baseline report. Candidate whole-string buried recall is also 0%; candidate
+guard-path scoring was not run after the stop condition. Windowing alone
+cannot identify an instruction the window classifier does not recognize.
+
+The old holdout is **already-seen diagnostic evidence**: sklearn recall
+36.27% → 50.98%, FPR 11.36% → 11.36%. It is not a clean generalization claim.
+All per-category values remain in the candidate report. The unchanged
+mDeBERTa holdout values are the baseline values in the release summary.
+
+Toxic-chat only: sklearn recall 79.31% → 81.61%, FPR 2.35% → 3.53%; its 87
+positive examples remain a small and noisy recall sample. Overall external
+FPR, rather than toxic-chat FPR alone, was the declared acceptance gate.
+The primary external CSV remained byte-identical (SHA256 prefix
+`580e5a966bf72cd0`, 7,435 rows).
+
+### Candidate training data and hygiene
+
+The released weights were trained on 16,754 rows; **the current
+`data/combined_dataset.csv` is the rejected candidate's training pool**,
+22,550 rows, SHA256 prefix `a68869d92a3e6dd1`. Do not infer that the bundled
+weights were trained on this newer CSV. The dataset is retained for review,
+not as evidence that the candidate is release-ready.
+
+New training sources: BIPIA train email contexts/train attacks, plus original
+window-sized indirect/exfiltration examples, benign tool/document carriers,
+security discussions, corrections, and user-authorized sends/uploads.
+Carriers include email, web, tool output, tables, code, summaries, recipes,
+and how-to instructions. Long carriers supply both benign windows and windows
+with attacks at the beginning, middle and end. A positive row must contain the
+entire payload within both the scan window and the first 512 tokenizer tokens;
+partial-span and truncated-away positives are discarded.
+
+Hygiene preserves serving-path NFKC cleaning, conflict removal, normalized
+dedup, per-source/per-label caps, and log2-length balancing. New rows use
+connected payload/template/carrier groups, merged before dedup so a discarded
+duplicate cannot lose split lineage; legacy rows keep their first-eight-word
+families. New matched benign windows share the attack family's split.
+683 evaluation overlaps were removed, including reserved payload substring
+matches and exact normalized serving windows from the targeted evaluation.
+The generated CSV was audited for duplicate texts, cross-split components,
+invalid labels and exact evaluation overlap; none remained.
+
+Length-only logistic regression fitted on train and scored once on grouped
+test produced **0.4647 AUC** (about 0.535 if its ranking is reversed), rather
+than a strong length shortcut. No dataset revisions followed that test score.
+Split counts (benign/malicious): train 9,198/8,996; val 1,119/1,110;
+test 958/1,169. Caps apply per source **and label**, so a source containing
+benign neighboring windows can exceed its malicious-row cap in total.
+
+| Candidate source | Rows |
+|---|---:|
+| xtram1 | 3,805 |
+| spml | 2,289 |
+| targeted_exfil | 2,229 |
+| targeted_indirect | 2,173 |
+| synthetic_hardneg | 1,527 |
+| synthetic | 1,287 |
+| itw_regular | 1,136 |
+| multilingual_pi | 974 |
+| toxic_chat | 960 |
+| targeted_carrier_benign | 938 |
+| gandalf | 776 |
+| oasst2 | 762 |
+| dolly | 747 |
+| itw_jailbreak | 652 |
+| awesome_prompts | 578 |
+| alpaca | 378 |
+| oasst2_followups | 361 |
+| oasst2_corrections | 308 |
+| deepset | 250 |
+| bipia_email_train | 227 |
+| jackhhao | 136 |
+| bipia_email_benign | 39 |
+| seed | 16 |
+| rubend18 | 2 |
+
+### Source licences and limits
+
+See [source revisions, formats, splits and licences](TARGETED_DATA_LICENSES.md)
+and `docs/data_licenses/` for the source notices. BIPIA's MIT text attacks and
+MIT email contexts are used; its separately licensed table/code and restricted
+news contexts are excluded. InjecAgent has no official train split, so all
+1,054 base cases are evaluation-only. NotInject's train/validation/test aliases
+are its one/two/three-trigger difficulty groups; all 339 cases are reserved
+rather than treating those groups as independent training/test families.
+This intentionally substitutes independent synthetic training examples for
+unavailable clean InjecAgent/NotInject training splits. No new NC data was
+added; existing toxic-chat restrictions remain.
+
+The authored indirect and buried cases reuse the same 100 instructions;
+they are paired, not 200 independent attack intents. Long carriers repeat
+original archive prose, so these numbers do not measure diverse long-document
+generalization. Authoring the evaluation and training scenarios in the same
+agent session also limits independence even though their templates and wording
+are separate. The frozen set has now been evaluated and reported; future
+changes must not tune on its failures.
+
+### Acceptance disposition
+
+- **FAIL — sklearn external:** recall condition passes (+0.67 points), FPR
+  fails (2.91% >2%). Candidate rejected and baseline restored.
+- **NOT RUN — mDeBERTa external:** stopped before transformer training.
+- **FAIL / INCOMPLETE — blind targeted improvement:** sklearn indirect
+  +12.22 points and exfiltration +19.10 points, buried +0; other after scores
+  not measured.
+- **NOT MET — benign security target:** sklearn worsens 17% →23%; mDeBERTa
+  baseline 22%, after not measured, so <5% cannot be claimed.
+- **REPORTED — old holdout:** already-seen; numbers above and in JSON.
+- **PASS — verification:** `uv run pytest tests/`: 75 passed, 18 skipped;
+  `ruff check app demo tests` and `ruff format --check app demo tests` pass.
+  Skipped tests are not represented as passes.
+
+All substantial CPU work was pinned to cores 0–3 with four-thread limits.
+GPU baseline inference used the RX 7700 XT; CPU INT8 scoring was serial.
+Training thread caps and sequential ONNX-validation sessions are now explicit.
+
+### Reproduce the experiment protocol
+
+Use a local venv (`UV_PROJECT_ENVIRONMENT=~/.cache/aegis-ml-venv`) with dev/hf2
+extras, `OMP_NUM_THREADS=4`, `OPENBLAS_NUM_THREADS=4`,
+`TOKENIZERS_PARALLELISM=false`, `HSA_OVERRIDE_GFX_VERSION=11.0.0`, and prefix
+compute commands with `taskset -c 0-3`. Set `TARGETED_SOURCE_CACHE` to the
+session scratchpad's `weak_categories` directory to reuse the pinned files.
+Preserve baseline model artifacts before any retraining. In a fresh copy
+without an already frozen targeted set:
+
+```bash
+uv run python -m training.data.targeted_eval
+# Sequentially, for sklearn, hf2, cascade2_hf2, onnx2 (ONNX2_USE_INT8=true):
+uv run python -m training.eval_suite --model sklearn --sets targeted --serving-long --name sklearn_targeted_baseline
+# Corresponding names: hf2_targeted_baseline, cascade2_hf2_targeted_baseline,
+# and onnx2_int8_targeted_baseline. Wait for each process to finish.
+uv run python -m training.data.prepare_dataset
+uv run python -m training.phase1_sklearn.train --loso
+# Stop if the declared external gate fails; do not retune against its results.
+uv run python -m training.targeted_acceptance
+```
+
+The retained candidate aggregate report lets the acceptance summary be
+regenerated without loading a rejected model. Transformer retraining/export
+commands in the earlier reproduction section are not evidence of execution
+for this failed round.

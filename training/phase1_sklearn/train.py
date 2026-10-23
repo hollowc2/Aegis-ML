@@ -170,7 +170,7 @@ def train(model_type: ModelType = "lr", max_fpr: float = 0.02, loso: bool = Fals
         logger.info("RF is a comparison baseline; not overwriting %s", SKLEARN_MODEL_PATH)
         return
     joblib.dump(pipeline, SKLEARN_MODEL_PATH, compress=3)
-    meta = {"threshold": round(threshold, 4), "params": params,
+    meta = {"threshold": threshold, "params": params,
             "sklearn_version": sklearn.__version__, "dataset": dataset_fingerprint()}
     SKLEARN_MODEL_PATH.with_suffix(".json").write_text(json.dumps(meta, indent=2))
     logger.info("Model saved to %s (%.1f MB)", SKLEARN_MODEL_PATH,

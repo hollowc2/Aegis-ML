@@ -1,0 +1,42 @@
+{
+  "branch": "improve-targeted-injection",
+  "baseline_files": {
+    "models/sklearn_classifier.joblib": {
+      "sha256": "e3ac2e9cee413838948dfe6c1b4084d9f8731dc8596bac014aa9f5da7d58d8a7",
+      "matches_preserved_baseline": true
+    },
+    "models/sklearn_classifier.json": {
+      "sha256": "ec8c91d69afee1bb7318b3c391b2fc2795824329a9486ffa18a8a1cc155621ff",
+      "matches_preserved_baseline": true
+    },
+    "models/hf2_classifier/config.json": {
+      "sha256": "bbdff8964ee762d0d08d143008d50c596ab8c6bfcbf3db8a87a9802d59f77fa4",
+      "matches_preserved_baseline": true
+    },
+    "models/hf2_classifier_onnx/config.json": {
+      "sha256": "524f9f4b26e60cc34108765836d065ec085b2f0c8531ba9617c8e9da3b285c51",
+      "matches_preserved_baseline": true
+    }
+  },
+  "transformer_weight_status": "Not retrained or overwritten",
+  "candidate_directory": "/tmp/claude-1000/-mnt-Repos-Utilities-Aegis-ML/d5bbe6bc-62fe-4a2e-b12b-3b05726498cc/scratchpad/weak_categories/rejected_candidate",
+  "baseline_directory": "/tmp/claude-1000/-mnt-Repos-Utilities-Aegis-ML/d5bbe6bc-62fe-4a2e-b12b-3b05726498cc/scratchpad/weak_categories/models",
+  "targeted_sha256": "e049ed098724e00357b2de19c8b465d6d7ab78a5e834965170c3009d1535c804",
+  "checks": {
+    "pytest": {
+      "command": "uv run pytest tests/",
+      "passed": 75,
+      "skipped": 18,
+      "failed": 0
+    },
+    "ruff_check": {
+      "command": "ruff check app demo tests",
+      "exit_code": 0
+    },
+    "ruff_format": {
+      "command": "ruff format --check app demo tests",
+      "exit_code": 0
+    }
+  },
+  "external_benchmark_unchanged": true
+}

@@ -1,0 +1,43 @@
+{
+  "rows": 22550,
+  "sha256_16": "a68869d92a3e6dd1",
+  "per_source": {
+    "xtram1": 3805,
+    "spml": 2289,
+    "targeted_exfil": 2229,
+    "targeted_indirect": 2173,
+    "synthetic_hardneg": 1527,
+    "synthetic": 1287,
+    "itw_regular": 1136,
+    "multilingual_pi": 974,
+    "toxic_chat": 960,
+    "targeted_carrier_benign": 938,
+    "gandalf": 776,
+    "oasst2": 762,
+    "dolly": 747,
+    "itw_jailbreak": 652,
+    "awesome_prompts": 578,
+    "alpaca": 378,
+    "oasst2_followups": 361,
+    "oasst2_corrections": 308,
+    "deepset": 250,
+    "bipia_email_train": 227,
+    "jackhhao": 136,
+    "bipia_email_benign": 39,
+    "seed": 16,
+    "rubend18": 2
+  },
+  "length_only_test_auc": 0.46472994958487446,
+  "splits": {
+    "0": {
+      "test": 958,
+      "train": 9198,
+      "val": 1119
+    },
+    "1": {
+      "test": 1169,
+      "train": 8996,
+      "val": 1110
+    }
+  }
+}
