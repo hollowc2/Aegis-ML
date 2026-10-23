@@ -1,0 +1,293 @@
+{
+  "model": "cascade2_int8",
+  "threshold": 0.26933510763740537,
+  "dataset": {
+    "path": "data/combined_dataset.csv",
+    "sha256_16": "0c6e12ed82b86e36",
+    "rows": 16754
+  },
+  "sets": {
+    "test": {
+      "n": 1605,
+      "n_malicious": 842,
+      "n_benign": 763,
+      "recall": 0.9133016627078385,
+      "fpr": 0.003931847968545216,
+      "precision": 0.9961139896373057,
+      "f1": 0.952912019826518,
+      "roc_auc": 0.9918296635047926,
+      "ms_per_example_batched": 24.46221947663568,
+      "breakdown": {
+        "alpaca": {
+          "n": 39,
+          "fpr": 0.0
+        },
+        "awesome_prompts": {
+          "n": 52,
+          "fpr": 0.0
+        },
+        "deepset": {
+          "n": 24,
+          "recall": 0.5,
+          "fpr": 0.0
+        },
+        "dolly": {
+          "n": 76,
+          "fpr": 0.0
+        },
+        "gandalf": {
+          "n": 79,
+          "recall": 1.0
+        },
+        "itw_jailbreak": {
+          "n": 51,
+          "recall": 0.6862745098039216
+        },
+        "itw_regular": {
+          "n": 81,
+          "fpr": 0.037037037037037035
+        },
+        "jackhhao": {
+          "n": 19,
+          "fpr": 0.0
+        },
+        "multilingual_pi": {
+          "n": 83,
+          "recall": 0.9397590361445783
+        },
+        "oasst2": {
+          "n": 87,
+          "fpr": 0.0
+        },
+        "oasst2_corrections": {
+          "n": 31,
+          "fpr": 0.0
+        },
+        "oasst2_followups": {
+          "n": 35,
+          "fpr": 0.0
+        },
+        "rubend18": {
+          "n": 1,
+          "recall": 1.0
+        },
+        "seed": {
+          "n": 4,
+          "recall": 1.0,
+          "fpr": 0.0
+        },
+        "spml": {
+          "n": 299,
+          "recall": 0.9049586776859504,
+          "fpr": 0.0
+        },
+        "synthetic": {
+          "n": 138,
+          "recall": 0.9849624060150376,
+          "fpr": 0.0
+        },
+        "synthetic_hardneg": {
+          "n": 60,
+          "fpr": 0.0
+        },
+        "toxic_chat": {
+          "n": 89,
+          "recall": 0.5833333333333334,
+          "fpr": 0.0
+        },
+        "xtram1": {
+          "n": 357,
+          "recall": 0.9411764705882353,
+          "fpr": 0.0
+        }
+      }
+    },
+    "external": {
+      "n": 7435,
+      "n_malicious": 1041,
+      "n_benign": 6394,
+      "recall": 0.8981748318924111,
+      "fpr": 0.008601814200813263,
+      "precision": 0.9444444444444444,
+      "f1": 0.9207287050713934,
+      "roc_auc": 0.9830236800410568,
+      "ms_per_example_batched": 14.104841865097548,
+      "breakdown": {
+        "deepset": {
+          "n": 115,
+          "recall": 0.2711864406779661,
+          "fpr": 0.0
+        },
+        "gandalf": {
+          "n": 112,
+          "recall": 1.0
+        },
+        "jackhhao": {
+          "n": 259,
+          "recall": 0.875,
+          "fpr": 0.016260162601626018
+        },
+        "toxic_chat": {
+          "n": 4902,
+          "recall": 0.7931034482758621,
+          "fpr": 0.011007268951194185
+        },
+        "xtram1": {
+          "n": 2047,
+          "recall": 0.9567233384853169,
+          "fpr": 0.0
+        }
+      }
+    },
+    "holdout": {
+      "n": 190,
+      "n_malicious": 102,
+      "n_benign": 88,
+      "recall": 0.4411764705882353,
+      "fpr": 0.056818181818181816,
+      "precision": 0.9,
+      "f1": 0.5921052631578947,
+      "roc_auc": 0.8475935828877006,
+      "ms_per_example_batched": 24.724999736841518,
+      "breakdown": {
+        "benign_code": {
+          "n": 12,
+          "fpr": 0.3333333333333333
+        },
+        "benign_creative": {
+          "n": 8,
+          "fpr": 0.0
+        },
+        "benign_long_document": {
+          "n": 12,
+          "fpr": 0.0
+        },
+        "benign_meta_discussion": {
+          "n": 8,
+          "fpr": 0.0
+        },
+        "benign_multilingual": {
+          "n": 16,
+          "fpr": 0.0
+        },
+        "benign_override_language": {
+          "n": 20,
+          "fpr": 0.05
+        },
+        "benign_structured_data": {
+          "n": 12,
+          "fpr": 0.0
+        },
+        "buried_in_long_text": {
+          "n": 8,
+          "recall": 0.0
+        },
+        "direct_paraphrase": {
+          "n": 15,
+          "recall": 0.7333333333333333
+        },
+        "exfiltration": {
+          "n": 12,
+          "recall": 0.25
+        },
+        "indirect_injection": {
+          "n": 15,
+          "recall": 0.2
+        },
+        "multilingual": {
+          "n": 16,
+          "recall": 0.625
+        },
+        "obfuscation": {
+          "n": 12,
+          "recall": 0.75
+        },
+        "prompt_extraction": {
+          "n": 12,
+          "recall": 0.5
+        },
+        "roleplay_jailbreak": {
+          "n": 12,
+          "recall": 0.25
+        }
+      }
+    },
+    "adversarial": {
+      "n": 320,
+      "n_malicious": 280,
+      "n_benign": 40,
+      "recall": 0.8785714285714286,
+      "fpr": 0.05,
+      "precision": 0.9919354838709677,
+      "f1": 0.9318181818181818,
+      "roc_auc": 0.979375,
+      "ms_per_example_batched": 9.183562971874437,
+      "breakdown": {
+        "base64_encoded": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "benign_context_manipulation": {
+          "n": 20,
+          "fpr": 0.1
+        },
+        "benign_security_hard_negative": {
+          "n": 20,
+          "fpr": 0.0
+        },
+        "code_block_injection": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "continuation_attack": {
+          "n": 20,
+          "recall": 0.9
+        },
+        "indirect_injection": {
+          "n": 20,
+          "recall": 0.9
+        },
+        "invisible_char_injection": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "many_shot_jailbreak": {
+          "n": 20,
+          "recall": 0.7
+        },
+        "multilingual_evasion": {
+          "n": 20,
+          "recall": 0.85
+        },
+        "nested_role_confusion": {
+          "n": 20,
+          "recall": 0.95
+        },
+        "paraphrase_attack": {
+          "n": 20,
+          "recall": 0.55
+        },
+        "structured_data_injection": {
+          "n": 20,
+          "recall": 0.95
+        },
+        "sycophantic_setup": {
+          "n": 20,
+          "recall": 0.65
+        },
+        "token_smuggling": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "unicode_homoglyph": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "virtual_prompt_injection": {
+          "n": 20,
+          "recall": 0.85
+        }
+      }
+    }
+  }
+}

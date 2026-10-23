@@ -38,6 +38,7 @@ so the rest of the service starts without the ML stack.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -60,6 +61,8 @@ class HF2Classifier:
         self._module = None
         self._tokenizer = None
         self._temperature: float = 1.0
+        # Decision threshold tuned at training time (config.json aegis_threshold)
+        self.threshold: float | None = None
         self._device = None
         self._loaded = False
         self._preprocessor = None
@@ -100,6 +103,9 @@ class HF2Classifier:
         aegis_model, temperature = AegisMTModel.from_pretrained(path)
         self._module = aegis_model.module
         self._temperature = temperature
+        config_file = path / "config.json"
+        if config_file.exists():
+            self.threshold = json.loads(config_file.read_text()).get("aegis_threshold")
 
         device = torch.device(f"cuda:{device_id}" if device_id >= 0 else "cpu")
         self._module.to(device)

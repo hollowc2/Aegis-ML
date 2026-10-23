@@ -1,0 +1,13 @@
+{
+  "threshold": 0.5544,
+  "params": {
+    "C": 16.0,
+    "char_max_features": 100000
+  },
+  "sklearn_version": "1.8.0",
+  "dataset": {
+    "path": "data/combined_dataset.csv",
+    "sha256_16": "0c6e12ed82b86e36",
+    "rows": 16754
+  }
+}

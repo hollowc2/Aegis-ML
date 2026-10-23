@@ -23,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.middleware import RequestLoggingMiddleware, create_limiter, setup_rate_limiter
 from app.api.routes import router
+from app.classifiers import resolve_threshold
 from app.config import get_settings
 from app.models.database import init_db
 
@@ -59,7 +60,6 @@ async def lifespan(app: FastAPI):
     logger.info("═══════════════════════════════════════════════")
     logger.info("Classifier type : %s", settings.classifier_type)
     logger.info("Backend URL     : %s", settings.backend_url)
-    logger.info("Threshold       : %.2f", settings.confidence_threshold)
     if settings.classifier_type in ("cascade", "cascade2"):
         logger.info(
             "Cascade band    : sk_low=%.2f  sk_high=%.2f",
@@ -73,6 +73,11 @@ async def lifespan(app: FastAPI):
     # ── Load classifier ────────────────────────────────────────────────────────
     classifier = _load_classifier(settings)
     app.state.classifier = classifier
+    logger.info(
+        "Threshold       : %.2f (%s)",
+        resolve_threshold(settings.confidence_threshold, classifier),
+        "CONFIDENCE_THRESHOLD" if settings.confidence_threshold is not None else "model default",
+    )
 
     # ── Shared HTTP client ─────────────────────────────────────────────────────
     app.state.http_client = httpx.AsyncClient(

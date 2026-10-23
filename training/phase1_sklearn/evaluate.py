@@ -2,7 +2,8 @@
 training/phase1_sklearn/evaluate.py
 =====================================
 Standalone evaluation script for the trained scikit-learn model.
-Useful for quick sanity checks and for computing metrics for the Phase 3 notebook.
+Quick sanity check on the in-distribution test split. For the full benchmark
+(external, holdout, adversarial sets) use `python -m training.eval_suite`.
 
 Run:
     python -m training.phase1_sklearn.evaluate
@@ -18,7 +19,6 @@ from pathlib import Path
 
 import joblib
 import numpy as np
-import pandas as pd
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
     classification_report,
@@ -67,15 +67,12 @@ def evaluate(threshold: float = 0.70) -> dict:
 
     # Load
     pipeline = joblib.load(SKLEARN_MODEL_PATH)
-    df = pd.read_csv(DATASET_CSV)
-    df = df.dropna().reset_index(drop=True)
+    from training.eval_suite import load_split, preprocess
 
-    # Use a fixed test split (same seed as training)
-    from sklearn.model_selection import train_test_split
-    _, X_test, _, y_test = train_test_split(
-        df["text"].tolist(), df["label"].tolist(),
-        test_size=0.2, stratify=df["label"].tolist(), random_state=42,
-    )
+    # Fixed, grouped test split written by prepare_dataset.py
+    test = load_split("test").dropna(subset=["text", "label"])
+    X_test = preprocess(test["text"].astype(str).tolist())
+    y_test = test["label"].astype(int).tolist()
 
     # Inference timing
     start = time.perf_counter()
@@ -132,9 +129,14 @@ def evaluate(threshold: float = 0.70) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate Phase 1 scikit-learn model")
-    parser.add_argument("--threshold", type=float, default=0.70)
+    parser.add_argument("--threshold", type=float, default=None,
+                        help="Defaults to the threshold tuned at training time")
     args = parser.parse_args()
-    evaluate(threshold=args.threshold)
+    threshold = args.threshold
+    if threshold is None:
+        from training.eval_suite import _default_threshold
+        threshold = _default_threshold("sklearn") or 0.5
+    evaluate(threshold=threshold)
 
 
 if __name__ == "__main__":

@@ -56,11 +56,15 @@ class Settings(BaseSettings):
             ),
         )
     )
-    confidence_threshold: float = Field(
-        default=0.70,
+    confidence_threshold: float | None = Field(
+        default=None,
         ge=0.0,
         le=1.0,
-        description="Minimum injection probability to block a request",
+        description=(
+            "Minimum injection probability to block a request. Unset = use the "
+            "threshold tuned for the loaded model at training time (see "
+            "docs/BENCHMARKS.md), falling back to 0.70 for models without one."
+        ),
     )
 
     # ── Model Paths ───────────────────────────────────────────────────────────
@@ -105,6 +109,15 @@ class Settings(BaseSettings):
         description=(
             "Extra malicious_prob added when invisible/RTL-override chars are detected. "
             "Set to 0.0 to disable the bias (e.g. for multilingual environments)."
+        ),
+    )
+    max_scan_segments: int = Field(
+        default=64,
+        ge=1,
+        description=(
+            "Maximum number of message windows classified per request. Each message is "
+            "scored separately and long messages are split into overlapping windows; "
+            "requests needing more windows than this are blocked (fail-secure)."
         ),
     )
 
@@ -158,8 +171,8 @@ class Settings(BaseSettings):
 
     @field_validator("confidence_threshold")
     @classmethod
-    def validate_threshold(cls, v: float) -> float:
-        if not 0.0 <= v <= 1.0:
+    def validate_threshold(cls, v: float | None) -> float | None:
+        if v is not None and not 0.0 <= v <= 1.0:
             raise ValueError("confidence_threshold must be between 0.0 and 1.0")
         return v
 

@@ -8,10 +8,14 @@ prob ≤ low_threshold), the verdict is returned immediately without invoking
 the heavier ONNX/HF model.  Only inputs in the ambiguous "grey zone" are
 escalated.
 
-Expected traffic split (empirical):
-    ~85-90%  cleared by sklearn  → ~0.3 ms average
-    ~10-15%  escalated to ONNX   → ~3-8 ms for those samples
-    Blended average latency      → ~0.5-1.5 ms
+Measured on the external benchmark with the default 0.05/0.95 band (see
+docs/BENCHMARKS.md): ~77% of prompts are settled by sklearn alone and ~23% are
+escalated, with recall/FPR matching the transformer on its own. Hard,
+out-of-distribution prompts escalate far more often (~60% of the holdout set).
+
+The block threshold is the slow model's tuned threshold: grey-zone prompts are
+scored by the slow model alone, and fast-path sklearn scores sit outside the
+[low, high] band (beyond any threshold in it), so one threshold serves both.
 
 The thresholds are tunable via CASCADE_SK_LOW_THRESHOLD /
 CASCADE_SK_HIGH_THRESHOLD environment variables (see config.py).
@@ -60,6 +64,15 @@ class CascadeClassifier:
         self.high_threshold = high_threshold
         self.slow_clf_label = slow_clf_label
 
+    @property
+    def threshold(self) -> float | None:
+        """Tuned threshold of the slow model (falls back to sklearn's)."""
+        for clf in (self.slow_clf, self.sklearn_clf):
+            tuned = getattr(clf, "threshold", None)
+            if isinstance(tuned, (int, float)):
+                return float(tuned)
+        return None
+
     def is_loaded(self) -> bool:
         return self.sklearn_clf.is_loaded() and self.slow_clf.is_loaded()
 
@@ -107,26 +120,10 @@ class CascadeClassifier:
         )
         slow_result = await self.slow_clf.predict(text)
 
-        # Take the maximum malicious probability from both stages so that a
-        # strong sklearn signal is never cancelled by a less-accurate slow
-        # classifier (e.g. INT8-quantised ONNX dropping a clear attack below
-        # the final threshold).
-        slow_prob: float = slow_result.get("malicious_prob", 0.0)
-        if sk_prob > slow_prob:
-            logger.debug(
-                "Cascade: sklearn signal (%.3f) > slow clf (%.3f) — using sklearn prob",
-                sk_prob,
-                slow_prob,
-            )
-            combined_prob = sk_prob
-            combined_benign = 1.0 - sk_prob
-            combined_label = "malicious" if combined_prob >= 0.5 else "benign"
-            return {
-                **slow_result,
-                "malicious_prob": combined_prob,
-                "benign_prob": combined_benign,
-                "label": combined_label,
-                "stage": f"sklearn_override({self.slow_clf_label})",
-            }
-
+        # The slow model decides the grey zone on its own score. Its threshold
+        # is the cascade's threshold, and the two models' scores are on
+        # different scales (an INT8 graph's tuned threshold can be ~0.3 while
+        # sklearn's is ~0.55), so mixing them — e.g. max(sk, slow) — would let
+        # middling sklearn scores block. Strong sklearn signals are already
+        # honoured by the high_threshold fast path above.
         return {**slow_result, "stage": self.slow_clf_label}

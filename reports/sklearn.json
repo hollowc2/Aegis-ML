@@ -1,0 +1,337 @@
+{
+  "model": "sklearn",
+  "threshold": 0.5543903571035809,
+  "dataset": {
+    "path": "data/combined_dataset.csv",
+    "sha256_16": "0c6e12ed82b86e36",
+    "rows": 16754
+  },
+  "sets": {
+    "test": {
+      "n": 1605,
+      "n_malicious": 842,
+      "n_benign": 763,
+      "recall": 0.9394299287410927,
+      "fpr": 0.011795543905635648,
+      "precision": 0.98875,
+      "f1": 0.9634591961023143,
+      "roc_auc": 0.9948836166775106,
+      "ms_per_example_batched": 0.9930579127407289,
+      "breakdown": {
+        "alpaca": {
+          "n": 39,
+          "fpr": 0.0
+        },
+        "awesome_prompts": {
+          "n": 52,
+          "fpr": 0.0
+        },
+        "deepset": {
+          "n": 24,
+          "recall": 0.6666666666666666,
+          "fpr": 0.0
+        },
+        "dolly": {
+          "n": 76,
+          "fpr": 0.0
+        },
+        "gandalf": {
+          "n": 79,
+          "recall": 1.0
+        },
+        "itw_jailbreak": {
+          "n": 51,
+          "recall": 0.6666666666666666
+        },
+        "itw_regular": {
+          "n": 81,
+          "fpr": 0.037037037037037035
+        },
+        "jackhhao": {
+          "n": 19,
+          "fpr": 0.0
+        },
+        "multilingual_pi": {
+          "n": 83,
+          "recall": 0.9397590361445783
+        },
+        "oasst2": {
+          "n": 87,
+          "fpr": 0.0
+        },
+        "oasst2_corrections": {
+          "n": 31,
+          "fpr": 0.0
+        },
+        "oasst2_followups": {
+          "n": 35,
+          "fpr": 0.05714285714285714
+        },
+        "rubend18": {
+          "n": 1,
+          "recall": 1.0
+        },
+        "seed": {
+          "n": 4,
+          "recall": 1.0,
+          "fpr": 0.0
+        },
+        "spml": {
+          "n": 299,
+          "recall": 0.9586776859504132,
+          "fpr": 0.03508771929824561
+        },
+        "synthetic": {
+          "n": 138,
+          "recall": 1.0,
+          "fpr": 0.0
+        },
+        "synthetic_hardneg": {
+          "n": 60,
+          "fpr": 0.0
+        },
+        "toxic_chat": {
+          "n": 89,
+          "recall": 0.6666666666666666,
+          "fpr": 0.025974025974025976
+        },
+        "xtram1": {
+          "n": 357,
+          "recall": 0.9592760180995475,
+          "fpr": 0.0
+        }
+      }
+    },
+    "external": {
+      "n": 7435,
+      "n_malicious": 1041,
+      "n_benign": 6394,
+      "recall": 0.9193083573487032,
+      "fpr": 0.018454801376290273,
+      "precision": 0.8902325581395348,
+      "f1": 0.9045368620037807,
+      "roc_auc": 0.9845966604739013,
+      "ms_per_example_batched": 0.4604926975190304,
+      "breakdown": {
+        "deepset": {
+          "n": 115,
+          "recall": 0.4915254237288136,
+          "fpr": 0.03571428571428571
+        },
+        "gandalf": {
+          "n": 112,
+          "recall": 0.9821428571428571
+        },
+        "jackhhao": {
+          "n": 259,
+          "recall": 0.875,
+          "fpr": 0.032520325203252036
+        },
+        "toxic_chat": {
+          "n": 4902,
+          "recall": 0.7931034482758621,
+          "fpr": 0.022637590861889927
+        },
+        "xtram1": {
+          "n": 2047,
+          "recall": 0.973724884080371,
+          "fpr": 0.002142857142857143
+        }
+      }
+    },
+    "holdout": {
+      "n": 190,
+      "n_malicious": 102,
+      "n_benign": 88,
+      "recall": 0.3627450980392157,
+      "fpr": 0.11363636363636363,
+      "precision": 0.7872340425531915,
+      "f1": 0.4966442953020134,
+      "roc_auc": 0.7483288770053477,
+      "ms_per_example_batched": 0.3844772318476125,
+      "breakdown": {
+        "benign_code": {
+          "n": 12,
+          "fpr": 0.16666666666666666
+        },
+        "benign_creative": {
+          "n": 8,
+          "fpr": 0.125
+        },
+        "benign_long_document": {
+          "n": 12,
+          "fpr": 0.0
+        },
+        "benign_meta_discussion": {
+          "n": 8,
+          "fpr": 0.375
+        },
+        "benign_multilingual": {
+          "n": 16,
+          "fpr": 0.0625
+        },
+        "benign_override_language": {
+          "n": 20,
+          "fpr": 0.15
+        },
+        "benign_structured_data": {
+          "n": 12,
+          "fpr": 0.0
+        },
+        "buried_in_long_text": {
+          "n": 8,
+          "recall": 0.0
+        },
+        "direct_paraphrase": {
+          "n": 15,
+          "recall": 0.7333333333333333
+        },
+        "exfiltration": {
+          "n": 12,
+          "recall": 0.3333333333333333
+        },
+        "indirect_injection": {
+          "n": 15,
+          "recall": 0.0
+        },
+        "multilingual": {
+          "n": 16,
+          "recall": 0.375
+        },
+        "obfuscation": {
+          "n": 12,
+          "recall": 0.3333333333333333
+        },
+        "prompt_extraction": {
+          "n": 12,
+          "recall": 0.75
+        },
+        "roleplay_jailbreak": {
+          "n": 12,
+          "recall": 0.25
+        }
+      }
+    },
+    "adversarial": {
+      "n": 320,
+      "n_malicious": 280,
+      "n_benign": 40,
+      "recall": 0.9071428571428571,
+      "fpr": 0.05,
+      "precision": 0.9921875,
+      "f1": 0.9477611940298508,
+      "roc_auc": 0.9845535714285714,
+      "ms_per_example_batched": 0.2260991061120876,
+      "breakdown": {
+        "base64_encoded": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "benign_context_manipulation": {
+          "n": 20,
+          "fpr": 0.1
+        },
+        "benign_security_hard_negative": {
+          "n": 20,
+          "fpr": 0.0
+        },
+        "code_block_injection": {
+          "n": 20,
+          "recall": 0.95
+        },
+        "continuation_attack": {
+          "n": 20,
+          "recall": 0.95
+        },
+        "indirect_injection": {
+          "n": 20,
+          "recall": 0.9
+        },
+        "invisible_char_injection": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "many_shot_jailbreak": {
+          "n": 20,
+          "recall": 0.8
+        },
+        "multilingual_evasion": {
+          "n": 20,
+          "recall": 0.8
+        },
+        "nested_role_confusion": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "paraphrase_attack": {
+          "n": 20,
+          "recall": 0.8
+        },
+        "structured_data_injection": {
+          "n": 20,
+          "recall": 0.9
+        },
+        "sycophantic_setup": {
+          "n": 20,
+          "recall": 0.85
+        },
+        "token_smuggling": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "unicode_homoglyph": {
+          "n": 20,
+          "recall": 0.95
+        },
+        "virtual_prompt_injection": {
+          "n": 20,
+          "recall": 0.8
+        }
+      }
+    }
+  },
+  "params": {
+    "C": 16.0,
+    "char_max_features": 100000
+  },
+  "sklearn_version": "1.8.0",
+  "max_val_fpr": 0.02,
+  "leave_one_source_out": {
+    "xtram1": {
+      "n": 3867,
+      "recall@0.5": 0.7540914813260596,
+      "roc_auc": 0.9581096106405096,
+      "fpr@0.5": 0.012803234501347708
+    },
+    "spml": {
+      "n": 2549,
+      "recall@0.5": 0.3715,
+      "roc_auc": 0.9068296903460837,
+      "fpr@0.5": 0.007285974499089253
+    },
+    "gandalf": {
+      "n": 776,
+      "recall@0.5": 0.9884020618556701
+    },
+    "multilingual_pi": {
+      "n": 974,
+      "recall@0.5": 0.27002053388090347
+    },
+    "itw_jailbreak": {
+      "n": 692,
+      "recall@0.5": 0.5274566473988439
+    },
+    "deepset": {
+      "n": 255,
+      "recall@0.5": 0.225,
+      "roc_auc": 0.7416363636363636,
+      "fpr@0.5": 0.0
+    },
+    "synthetic": {
+      "n": 1286,
+      "recall@0.5": 0.734136546184739,
+      "roc_auc": 0.9781565285532373,
+      "fpr@0.5": 0.0
+    }
+  }
+}

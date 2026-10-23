@@ -20,9 +20,11 @@ Fail-secure: any exception during classification → block the request.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+from app.classifiers import resolve_threshold
 from app.config import get_settings
 from app.models.schemas import (
     ChatCompletionRequest,
@@ -38,21 +40,40 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _extract_text(request: ChatCompletionRequest) -> str:
+# Long messages are scored in overlapping windows. ~2000 characters stays under
+# the 512-token limit of the transformer classifiers for typical text, so an
+# attack placed after a long benign preamble is never truncated away.
+SEGMENT_CHARS = 2000
+SEGMENT_OVERLAP = 400
+
+
+def _extract_segments(request: ChatCompletionRequest) -> list[str]:
     """
-    Concatenate all message contents into a single string for classification.
+    Split the request into the pieces that are classified independently.
+
+    Every message is untrusted (see docs/THREAT_MODEL.md), so each one is scored
+    on its own and the request takes the most malicious score. Concatenating
+    messages instead would let a long benign system prompt or chat history
+    dilute an attack, or push it past the transformer's truncation limit.
 
     Role prefixes are intentionally omitted: the training dataset contains only
-    raw message text, and patterns like "[INST]" / "<<SYS>>" are present in
-    malicious training examples.  Prepending "[user]:" / "[assistant]:" during
-    inference would create a train/inference distribution mismatch that causes
-    both false positives (benign messages flagged because they start with "[")
-    and false negatives (injections that happen to lack bracket syntax).
+    raw message text, so prepending "[user]:" etc. would create a train/inference
+    mismatch.
     """
-    parts = []
+    segments: list[str] = []
+    step = SEGMENT_CHARS - SEGMENT_OVERLAP
     for msg in request.messages:
-        parts.append(msg.content)
-    return "\n".join(parts)
+        content = msg.content.strip()
+        if not content:
+            continue
+        if len(content) <= SEGMENT_CHARS:
+            segments.append(content)
+            continue
+        for start in range(0, len(content) - SEGMENT_OVERLAP, step):
+            segments.append(content[start : start + SEGMENT_CHARS])
+    # Identical segments (e.g. a repeated system prompt) only need scoring once.
+    unique = list(dict.fromkeys(segments))
+    return unique or [""]
 
 
 async def run_input_guardrail(
@@ -60,16 +81,34 @@ async def run_input_guardrail(
     classifier: SklearnClassifier | HFClassifier,
 ) -> InputGuardrailResult:
     """
-    Classify the incoming request.
+    Classify the incoming request, one message window at a time.
 
     Returns:
         InputGuardrailResult with verdict=block if malicious, allow otherwise.
     """
     settings = get_settings()
-    text = _extract_text(request)
+    segments = _extract_segments(request)
+
+    if len(segments) > settings.max_scan_segments:
+        logger.warning(
+            "Input needs %d scan windows (limit %d) — fail-secure block",
+            len(segments),
+            settings.max_scan_segments,
+        )
+        return InputGuardrailResult(
+            verdict=GuardrailVerdict.block,
+            is_malicious=True,
+            confidence=1.0,
+            threat_category=ThreatCategory.prompt_injection,
+            reason=(
+                f"Input too large to scan: {len(segments)} windows exceeds "
+                f"MAX_SCAN_SEGMENTS={settings.max_scan_segments}"
+            ),
+        )
 
     try:
-        result = await _classify(text, classifier, settings)
+        results = await asyncio.gather(*(_classify(s, classifier, settings) for s in segments))
+        result = max(results, key=lambda r: r.confidence)
     except Exception as exc:
         # Fail-secure: any error in the classifier pipeline blocks the request
         logger.error("Input guardrail classification error (fail-secure block): %s", exc)
@@ -90,7 +129,7 @@ async def _classify(
     settings,
 ) -> InputGuardrailResult:
     """Delegate to whichever classifier is loaded and interpret the result."""
-    threshold = settings.confidence_threshold
+    threshold = resolve_threshold(settings.confidence_threshold, classifier)
 
     # ── Phase 3: Unicode preprocessing ───────────────────────────────────────
     preprocess_flags: dict = {}

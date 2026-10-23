@@ -12,7 +12,8 @@ Key improvements over Phase 2:
   - threat_category column in dataset → learned rather than heuristic labels
   - --adversarial-training flag: 2-epoch fine-tuning pass on augmented hard examples
   - Post-training temperature calibration (T* saved in config.json)
-  - Effective batch size 128 (gradient accumulation × 8) for multi-task stability
+  - Fixed grouped train/val/test split from prepare_dataset.py; best checkpoint by val ROC-AUC
+  - Threshold picked on val under an FPR budget; results via training.eval_suite
 
 GPU requirements (DeBERTa-v3-base, fp32):
   Full fine-tune: ~10 GB VRAM
@@ -22,7 +23,7 @@ AMD ROCm: set HSA_OVERRIDE_GFX_VERSION=11.0.0 before running.
 
 Run:
     python -m training.phase3_hf2.train
-    python -m training.phase3_hf2.train --model deberta-base --epochs 12
+    python -m training.phase3_hf2.train --model mdeberta     # multilingual base
     python -m training.phase3_hf2.train --adversarial-training
     python -m training.phase3_hf2.train --model modernbert
 """
@@ -42,7 +43,6 @@ import pandas as pd
 import torch
 from datasets import Dataset, DatasetDict
 from huggingface_hub import snapshot_download
-from sklearn.model_selection import train_test_split
 from transformers import (
     AutoTokenizer,
     DataCollatorWithPadding,
@@ -51,6 +51,7 @@ from transformers import (
     TrainingArguments,
 )
 
+from training.eval_suite import pick_threshold, preprocess, run_suite
 from training.phase3_hf2.model import (
     AegisMTModel,
     BINARY_ID2LABEL,
@@ -71,6 +72,7 @@ MODEL_NAMES = {
     "distilbert": "distilbert-base-uncased",
     "deberta": "microsoft/deberta-v3-small",
     "deberta-base": "microsoft/deberta-v3-base",
+    "mdeberta": "microsoft/mdeberta-v3-base",
     "modernbert": "answerdotai/ModernBERT-base",
 }
 
@@ -78,50 +80,29 @@ MODEL_NAMES = {
 # ── Data Loading ──────────────────────────────────────────────────────────────
 
 def load_data() -> DatasetDict:
-    """Load and split the combined dataset into train / val / test splits."""
+    """Load the combined dataset using its fixed train / val / test split column."""
     if not DATASET_CSV.exists():
         logger.info("Dataset not found — generating...")
         from training.data.prepare_dataset import main as prep_main
         prep_main()
 
     df = pd.read_csv(DATASET_CSV).dropna(subset=["text", "label"])
-    df["text"] = df["text"].astype(str)
+    if "split" not in df.columns:
+        raise ValueError("Dataset has no split column — rerun training.data.prepare_dataset")
+    df["text"] = preprocess(df["text"].astype(str).tolist())
     df["label"] = df["label"].astype(int)
+    # Map threat_category string → integer id (-100 = ignored by the auxiliary loss)
+    df["threat_label"] = df["threat_category"].map(THREAT2ID).fillna(-100).astype(int)
 
-    # Map threat_category string → integer id (-100 if unknown/missing)
-    if "threat_category" in df.columns:
-        df["threat_label"] = df["threat_category"].map(THREAT2ID).fillna(-100).astype(int)
-    else:
-        # Fallback: heuristic assignment — benign → "none", malicious → "prompt_injection"
-        df["threat_label"] = df["label"].map({0: THREAT2ID["none"], 1: THREAT2ID["prompt_injection"]})
-
-    X_train, X_test, y_train, y_test, t_train, t_test = train_test_split(
-        df["text"].tolist(),
-        df["label"].tolist(),
-        df["threat_label"].tolist(),
-        test_size=0.15,
-        stratify=df["label"].tolist(),
-        random_state=42,
-    )
-    X_train, X_val, y_train, y_val, t_train, t_val = train_test_split(
-        X_train, y_train, t_train,
-        test_size=0.12,
-        stratify=y_train,
-        random_state=42,
-    )
-
-    def make_ds(texts, labels, threat_labels):
+    def make_ds(split: str) -> Dataset:
+        part = df[df["split"] == split]
         return Dataset.from_dict({
-            "text": texts,
-            "label": labels,
-            "threat_label": threat_labels,
+            "text": part["text"].tolist(),
+            "label": part["label"].tolist(),
+            "threat_label": part["threat_label"].tolist(),
         })
 
-    return DatasetDict({
-        "train": make_ds(X_train, y_train, t_train),
-        "validation": make_ds(X_val, y_val, t_val),
-        "test": make_ds(X_test, y_test, t_test),
-    })
+    return DatasetDict({"train": make_ds("train"), "validation": make_ds("val"), "test": make_ds("test")})
 
 
 def get_tokenize_fn(tokenizer, max_length: int = 512):
@@ -139,7 +120,7 @@ def get_tokenize_fn(tokenizer, max_length: int = 512):
 
 def compute_metrics(eval_pred):
     """Metrics for Trainer (operates on binary_logits = index 0 output)."""
-    from sklearn.metrics import f1_score, confusion_matrix
+    from sklearn.metrics import confusion_matrix, f1_score, roc_auc_score
     # eval_pred.predictions may be a tuple (binary_logits, threat_logits) or just logits
     predictions = eval_pred.predictions
     if isinstance(predictions, tuple):
@@ -149,6 +130,8 @@ def compute_metrics(eval_pred):
     labels = eval_pred.label_ids
 
     preds = np.argmax(logits, axis=-1)
+    shifted = logits - logits.max(axis=-1, keepdims=True)
+    probs = np.exp(shifted)[:, 1] / np.exp(shifted).sum(axis=-1)
     f1 = f1_score(labels, preds, average="binary")
     acc = (preds == labels).mean()
     cm = confusion_matrix(labels, preds)
@@ -160,6 +143,7 @@ def compute_metrics(eval_pred):
         "f1": float(f1),
         "fpr": float(fpr),
         "fnr": float(fnr),
+        "roc_auc": float(roc_auc_score(labels, probs)),
     }
 
 
@@ -240,6 +224,26 @@ def fit_temperature(model, val_dataset, tokenizer, device: int, max_length: int 
     return T_star
 
 
+def predict_proba(model, tokenizer, texts: list[str], temperature: float, device: int,
+                  max_length: int = 512, batch_size: int = 32) -> np.ndarray:
+    """Calibrated malicious probabilities; batches sorted by length for speed."""
+    import torch.nn.functional as F
+
+    model.eval()
+    order = np.argsort([len(t) for t in texts])
+    probs = np.empty(len(texts), dtype=float)
+    target = f"cuda:{device}" if device >= 0 else "cpu"
+    with torch.no_grad():
+        for i in range(0, len(texts), batch_size):
+            idx = order[i:i + batch_size]
+            enc = tokenizer([texts[j] for j in idx], truncation=True, max_length=max_length,
+                            padding=True, return_tensors="pt")
+            enc = {k: v.to(target) for k, v in enc.items()}
+            logits = model(**enc).binary_logits / temperature
+            probs[idx] = F.softmax(logits, dim=-1)[:, 1].float().cpu().numpy()
+    return probs
+
+
 # ── Adversarial Augmentation ──────────────────────────────────────────────────
 
 def augment_hard_negatives(train_df: pd.DataFrame) -> pd.DataFrame:
@@ -294,6 +298,8 @@ def train(
     num_workers: int = 2,
     resume: bool = False,
     adversarial_only: bool = False,
+    grad_accum: int = 2,
+    max_fpr: float = 0.02,
 ) -> None:
     MODELS_DIR.mkdir(exist_ok=True)
 
@@ -307,7 +313,7 @@ def train(
     logger.info("Phase 3 HF2 training")
     logger.info("Base model      : %s", base_model_name)
     logger.info("Epochs          : %d", num_epochs)
-    logger.info("Batch size      : %d (eff. %d with grad. accum. × 16)", batch_size, batch_size * 16)
+    logger.info("Batch size      : %d (eff. %d with grad. accum. × %d)", batch_size, batch_size * grad_accum, grad_accum)
     logger.info("Dataloader workers: %d", num_workers)
     logger.info("PyTorch threads : %d intra / %d inter", torch_threads, max(1, torch_threads // 2))
     logger.info("Adversarial aug : %s", use_adversarial_training or adversarial_only)
@@ -375,9 +381,10 @@ def train(
         lr_scheduler_type="cosine",
         eval_strategy="epoch",
         save_strategy="epoch",
+        save_total_limit=2,             # best + latest; each checkpoint is several GB
         load_best_model_at_end=True,
-        metric_for_best_model="fnr",
-        greater_is_better=False,
+        metric_for_best_model="roc_auc",
+        greater_is_better=True,
         logging_steps=50,
         fp16=False,
         bf16=False,
@@ -385,7 +392,7 @@ def train(
         report_to="none",
         dataloader_pin_memory=False,
         dataloader_num_workers=num_workers,
-        gradient_accumulation_steps=16,  # effective batch = 128 (batch_size 8 × 16)
+        gradient_accumulation_steps=grad_accum,
         gradient_checkpointing=True,     # trade compute for VRAM (needed on 12 GB with fp32)
         gradient_checkpointing_kwargs={"use_reentrant": False},  # DeBERTa disentangled attn incompatible with reentrant GC
         label_smoothing_factor=0.0,     # label smoothing is handled inside the model loss
@@ -445,7 +452,7 @@ def train(
             report_to="none",
             dataloader_pin_memory=False,
             dataloader_num_workers=num_workers,
-            gradient_accumulation_steps=16,
+            gradient_accumulation_steps=grad_accum,
             gradient_checkpointing=True,
             gradient_checkpointing_kwargs={"use_reentrant": False},
             remove_unused_columns=False,
@@ -474,14 +481,26 @@ def train(
     device = device_id
     T_star = fit_temperature(model, tokenised["validation"], tokenizer, device, max_length)
 
+    # ── Threshold on val + shared evaluation suite ────────────────────────────
+    def score_fn(texts):
+        return predict_proba(model, tokenizer, list(texts), T_star, device, max_length)
+
+    threshold = pick_threshold(dataset["validation"]["label"],
+                               score_fn(dataset["validation"]["text"]), max_fpr=max_fpr)
+    logger.info("Threshold %.3f keeps val FPR ≤ %.1f%%", threshold, max_fpr * 100)
+    run_suite(score_fn, threshold, name=f"hf2_{model_key}",
+              extra={"base_model": base_model_name, "temperature": T_star, "max_val_fpr": max_fpr})
+
     # ── Save ───────────────────────────────────────────────────────────────────
     aegis_model._module = model
     aegis_model.save_pretrained(
         HF2_MODEL_OUTPUT,
         tokenizer=tokenizer,
         temperature_scaling=T_star,
+        extra_config={"aegis_threshold": threshold},
     )
     logger.info("Phase 3 HF2 model saved to %s", HF2_MODEL_OUTPUT)
+    logger.info("Recommended: CONFIDENCE_THRESHOLD=%.2f", threshold)
 
 
 def main() -> None:
@@ -492,9 +511,13 @@ def main() -> None:
         default="deberta-base",
         help="Base model to fine-tune (default: deberta-base)",
     )
-    parser.add_argument("--epochs", type=int, default=12)
-    parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--lr", type=float, default=1e-5)
+    parser.add_argument("--epochs", type=int, default=4)
+    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--grad-accum", type=int, default=2,
+                        help="Gradient accumulation steps (effective batch = batch-size × this)")
+    parser.add_argument("--lr", type=float, default=2e-5)
+    parser.add_argument("--max-fpr", type=float, default=0.02,
+                        help="FPR budget on the val split used to pick the threshold")
     parser.add_argument(
         "--max-length",
         type=int,
@@ -534,6 +557,8 @@ def main() -> None:
         num_workers=args.num_workers,
         resume=args.resume,
         adversarial_only=args.adversarial_only,
+        grad_accum=args.grad_accum,
+        max_fpr=args.max_fpr,
     )
 
 

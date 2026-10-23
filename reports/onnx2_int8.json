@@ -1,0 +1,293 @@
+{
+  "model": "onnx2_int8",
+  "threshold": 0.26933510763740537,
+  "dataset": {
+    "path": "data/combined_dataset.csv",
+    "sha256_16": "0c6e12ed82b86e36",
+    "rows": 16754
+  },
+  "sets": {
+    "test": {
+      "n": 1605,
+      "n_malicious": 842,
+      "n_benign": 763,
+      "recall": 0.9026128266033254,
+      "fpr": 0.009174311926605505,
+      "precision": 0.9908735332464146,
+      "f1": 0.9446861404599131,
+      "roc_auc": 0.9867584201629397,
+      "ms_per_example_batched": 106.57152389595011,
+      "breakdown": {
+        "alpaca": {
+          "n": 39,
+          "fpr": 0.0
+        },
+        "awesome_prompts": {
+          "n": 52,
+          "fpr": 0.019230769230769232
+        },
+        "deepset": {
+          "n": 24,
+          "recall": 0.3888888888888889,
+          "fpr": 0.0
+        },
+        "dolly": {
+          "n": 76,
+          "fpr": 0.0
+        },
+        "gandalf": {
+          "n": 79,
+          "recall": 0.9873417721518988
+        },
+        "itw_jailbreak": {
+          "n": 51,
+          "recall": 0.6862745098039216
+        },
+        "itw_regular": {
+          "n": 81,
+          "fpr": 0.06172839506172839
+        },
+        "jackhhao": {
+          "n": 19,
+          "fpr": 0.0
+        },
+        "multilingual_pi": {
+          "n": 83,
+          "recall": 0.927710843373494
+        },
+        "oasst2": {
+          "n": 87,
+          "fpr": 0.0
+        },
+        "oasst2_corrections": {
+          "n": 31,
+          "fpr": 0.0
+        },
+        "oasst2_followups": {
+          "n": 35,
+          "fpr": 0.02857142857142857
+        },
+        "rubend18": {
+          "n": 1,
+          "recall": 1.0
+        },
+        "seed": {
+          "n": 4,
+          "recall": 1.0,
+          "fpr": 0.0
+        },
+        "spml": {
+          "n": 299,
+          "recall": 0.8925619834710744,
+          "fpr": 0.0
+        },
+        "synthetic": {
+          "n": 138,
+          "recall": 0.9699248120300752,
+          "fpr": 0.0
+        },
+        "synthetic_hardneg": {
+          "n": 60,
+          "fpr": 0.0
+        },
+        "toxic_chat": {
+          "n": 89,
+          "recall": 0.5833333333333334,
+          "fpr": 0.0
+        },
+        "xtram1": {
+          "n": 357,
+          "recall": 0.9411764705882353,
+          "fpr": 0.0
+        }
+      }
+    },
+    "external": {
+      "n": 7435,
+      "n_malicious": 1041,
+      "n_benign": 6394,
+      "recall": 0.8847262247838616,
+      "fpr": 0.00985298717547701,
+      "precision": 0.9359756097560976,
+      "f1": 0.9096296296296297,
+      "roc_auc": 0.9782386345027473,
+      "ms_per_example_batched": 57.24953266940146,
+      "breakdown": {
+        "deepset": {
+          "n": 115,
+          "recall": 0.23728813559322035,
+          "fpr": 0.0
+        },
+        "gandalf": {
+          "n": 112,
+          "recall": 0.9821428571428571
+        },
+        "jackhhao": {
+          "n": 259,
+          "recall": 0.875,
+          "fpr": 0.016260162601626018
+        },
+        "toxic_chat": {
+          "n": 4902,
+          "recall": 0.7586206896551724,
+          "fpr": 0.012668743509865006
+        },
+        "xtram1": {
+          "n": 2047,
+          "recall": 0.9459041731066461,
+          "fpr": 0.0
+        }
+      }
+    },
+    "holdout": {
+      "n": 190,
+      "n_malicious": 102,
+      "n_benign": 88,
+      "recall": 0.47058823529411764,
+      "fpr": 0.056818181818181816,
+      "precision": 0.9056603773584906,
+      "f1": 0.6193548387096774,
+      "roc_auc": 0.8650846702317291,
+      "ms_per_example_batched": 39.51755825789501,
+      "breakdown": {
+        "benign_code": {
+          "n": 12,
+          "fpr": 0.3333333333333333
+        },
+        "benign_creative": {
+          "n": 8,
+          "fpr": 0.0
+        },
+        "benign_long_document": {
+          "n": 12,
+          "fpr": 0.0
+        },
+        "benign_meta_discussion": {
+          "n": 8,
+          "fpr": 0.0
+        },
+        "benign_multilingual": {
+          "n": 16,
+          "fpr": 0.0
+        },
+        "benign_override_language": {
+          "n": 20,
+          "fpr": 0.05
+        },
+        "benign_structured_data": {
+          "n": 12,
+          "fpr": 0.0
+        },
+        "buried_in_long_text": {
+          "n": 8,
+          "recall": 0.0
+        },
+        "direct_paraphrase": {
+          "n": 15,
+          "recall": 0.6666666666666666
+        },
+        "exfiltration": {
+          "n": 12,
+          "recall": 0.25
+        },
+        "indirect_injection": {
+          "n": 15,
+          "recall": 0.2
+        },
+        "multilingual": {
+          "n": 16,
+          "recall": 0.875
+        },
+        "obfuscation": {
+          "n": 12,
+          "recall": 0.8333333333333334
+        },
+        "prompt_extraction": {
+          "n": 12,
+          "recall": 0.5
+        },
+        "roleplay_jailbreak": {
+          "n": 12,
+          "recall": 0.16666666666666666
+        }
+      }
+    },
+    "adversarial": {
+      "n": 320,
+      "n_malicious": 280,
+      "n_benign": 40,
+      "recall": 0.8464285714285714,
+      "fpr": 0.05,
+      "precision": 0.9916317991631799,
+      "f1": 0.9132947976878613,
+      "roc_auc": 0.9764285714285714,
+      "ms_per_example_batched": 27.674304849999487,
+      "breakdown": {
+        "base64_encoded": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "benign_context_manipulation": {
+          "n": 20,
+          "fpr": 0.1
+        },
+        "benign_security_hard_negative": {
+          "n": 20,
+          "fpr": 0.0
+        },
+        "code_block_injection": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "continuation_attack": {
+          "n": 20,
+          "recall": 0.9
+        },
+        "indirect_injection": {
+          "n": 20,
+          "recall": 0.8
+        },
+        "invisible_char_injection": {
+          "n": 20,
+          "recall": 0.95
+        },
+        "many_shot_jailbreak": {
+          "n": 20,
+          "recall": 0.55
+        },
+        "multilingual_evasion": {
+          "n": 20,
+          "recall": 0.85
+        },
+        "nested_role_confusion": {
+          "n": 20,
+          "recall": 0.95
+        },
+        "paraphrase_attack": {
+          "n": 20,
+          "recall": 0.5
+        },
+        "structured_data_injection": {
+          "n": 20,
+          "recall": 0.95
+        },
+        "sycophantic_setup": {
+          "n": 20,
+          "recall": 0.55
+        },
+        "token_smuggling": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "unicode_homoglyph": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "virtual_prompt_injection": {
+          "n": 20,
+          "recall": 0.85
+        }
+      }
+    }
+  }
+}

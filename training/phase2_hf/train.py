@@ -43,7 +43,6 @@ import pandas as pd
 import torch
 from datasets import Dataset, DatasetDict
 from huggingface_hub import snapshot_download
-from sklearn.model_selection import train_test_split
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
@@ -52,6 +51,8 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
+
+from training.eval_suite import preprocess
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 logger = logging.getLogger(__name__)
@@ -71,33 +72,23 @@ LABEL2ID = {"BENIGN": 0, "MALICIOUS": 1}
 
 
 def load_data() -> DatasetDict:
-    """Load and split the dataset into HuggingFace DatasetDict."""
+    """Load the dataset using the fixed train / val / test split from prepare_dataset.py."""
     if not DATASET_CSV.exists():
         logger.info("Dataset not found — generating...")
         from training.data.prepare_dataset import main as prep_main
         prep_main()
 
-    df = pd.read_csv(DATASET_CSV).dropna()
-    df["text"] = df["text"].astype(str)
+    df = pd.read_csv(DATASET_CSV).dropna(subset=["text", "label"])
+    if "split" not in df.columns:
+        raise ValueError("Dataset has no split column — rerun training.data.prepare_dataset")
+    df["text"] = preprocess(df["text"].astype(str).tolist())
     df["label"] = df["label"].astype(int)
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        df["text"].tolist(), df["label"].tolist(),
-        test_size=0.15, stratify=df["label"].tolist(), random_state=42,
-    )
-    X_train, X_val, y_train, y_val = train_test_split(
-        X_train, y_train,
-        test_size=0.12, stratify=y_train, random_state=42,
-    )
+    def make_ds(split: str) -> Dataset:
+        part = df[df["split"] == split]
+        return Dataset.from_dict({"text": part["text"].tolist(), "label": part["label"].tolist()})
 
-    def make_ds(texts, labels):
-        return Dataset.from_dict({"text": texts, "label": labels})
-
-    return DatasetDict({
-        "train": make_ds(X_train, y_train),
-        "validation": make_ds(X_val, y_val),
-        "test": make_ds(X_test, y_test),
-    })
+    return DatasetDict({"train": make_ds("train"), "validation": make_ds("val"), "test": make_ds("test")})
 
 
 def get_tokenize_fn(tokenizer, max_length: int = 512):

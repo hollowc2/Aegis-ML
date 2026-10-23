@@ -100,16 +100,27 @@ limitations.
 |---|---|---|---|
 | Phase 1 | TF-IDF + logistic regression | Lightweight baseline and fast path | Bundled |
 | Phase 2 | DistilBERT or DeBERTa-v3-small | Semantic binary classification | Train/export separately |
-| Phase 3 | Multi-task DeBERTa-v3-base | Binary verdict plus 15 threat categories | Train/export separately |
+| Phase 3 | Multi-task mDeBERTa-v3-base (multilingual) | Binary verdict plus 7 threat categories | Train/export separately |
 | Cascade | sklearn → ONNX | Escalate ambiguous prompts to a neural model | Requires ONNX artifact |
 
-The Phase 1 evaluation reproduces **0.9735 F1**, **0.9982 ROC-AUC**,
-**0.31% FPR**, and **4.87% FNR** on a fixed 2,586-row test split at a `0.70`
-threshold. Recorded latency was approximately `0.2 ms/sample` on the
-development machine.
-Hardware-dependent latency is illustrative, and Phase 2/3 numbers are not
-published here until their artifacts and results can be reproduced. Full
-methodology and caveats are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+On the external benchmark — 7,435 prompts from five public datasets' test
+splits, never trained or tuned on — at thresholds chosen on validation data
+for ≤2% false positives:
+
+| Model | Recall | FPR | ROC-AUC |
+|---|---:|---:|---:|
+| Previous release (v1 sklearn, 0.70) | 70.5% | 6.3% | 0.928 |
+| Phase 1 sklearn (bundled) | 91.9% | 1.8% | 0.985 |
+| Phase 3 mDeBERTa | 93.4% | 1.3% | 0.987 |
+| cascade2 (sklearn → mDeBERTa FP32) | 93.5% | 1.2% | 0.985 |
+| cascade2 (sklearn → ONNX INT8, CPU) | 89.8% | 0.9% | 0.983 |
+
+The previous release's published 0.998 AUC came from a random split of a
+dataset with heavy near-duplication; the rebuilt dataset is deduplicated,
+length-balanced and split by near-duplicate family. Hand-written
+out-of-distribution attacks (indirect injection, exfiltration, attacks buried
+in long text) remain much harder — full methodology, per-category results and
+caveats are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ## Quick start
 
@@ -180,7 +191,7 @@ Copy `.env.example` to `.env`. Common settings:
 |---|---:|---|
 | `BACKEND_URL` | `http://localhost:8080/v1/chat/completions` | Backend model endpoint |
 | `CLASSIFIER_TYPE` | `sklearn` | `sklearn`, `hf`, `onnx`, `cascade`, `hf2`, `onnx2`, or `cascade2` |
-| `CONFIDENCE_THRESHOLD` | `0.70` | Block at or above this malicious probability |
+| `CONFIDENCE_THRESHOLD` | model's tuned value | Block at or above this malicious probability; unset uses the threshold tuned for the loaded model |
 | `RATE_LIMIT_PER_MINUTE` | `60` | Per-IP request limit |
 | `REDACT_PROMPTS_IN_LOGS` | `false` | Exclude prompt text from audit records |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./logs/aegis_audit.db` | Audit database |
@@ -193,18 +204,19 @@ and service settings.
 Train and evaluate the bundled baseline:
 
 ```bash
+uv run python -m training.data.holdout_eval
 uv run python -m training.data.prepare_dataset
-uv run python -m training.phase1_sklearn.train
-uv run python -m training.phase1_sklearn.evaluate --threshold 0.70
+uv run python -m training.phase1_sklearn.train --loso
+uv run python -m training.eval_suite --model sklearn
 ```
 
 Install the heavier transformer toolchain only when needed:
 
 ```bash
 uv sync --locked --extra hf2
-uv run aegis-train-hf2 --epochs 12
-uv run aegis-eval-hf2 --threshold 0.70
+uv run aegis-train-hf2 --model mdeberta
 uv run aegis-export-hf2 --validate
+uv run python -m training.eval_suite --model cascade2
 ```
 
 GPU training is optional; the bundled baseline and default demo run on CPU.

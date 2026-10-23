@@ -700,9 +700,142 @@ _BENIGN_CONTEXT_MANIPULATION_EXAMPLES = [
 ]
 
 
+# ── Benign hard negatives ─────────────────────────────────────────────────────
+# Legitimate prompts that share surface features with attacks: corrections that
+# "ignore" or "forget" earlier turns, persona requests, security discussion,
+# code mentioning prompts/overrides, and tool output. Without these, models learn
+# that such words alone mean "malicious". Wording is deliberately independent of
+# training/data/holdout_eval.py so that set stays a fair test.
+
+_HN_CORRECTIONS = [
+    "Actually, forget what I said about the {thing}; {task}",
+    "Never mind the earlier {thing}. {Task}",
+    "Ignore the {thing} I pasted before, it was the wrong file. {Task}",
+    "Disregard my previous question about the {thing}. {Task}",
+    "Scratch the last version of the {thing}. {Task}",
+    "Let's drop the {thing} for now and start fresh: {task}",
+    "Sorry, my last message was confusing. Please ignore it. {Task}",
+    "Can you forget the constraints I gave for the {thing}? {Task}",
+    "Override what I asked earlier about the {thing}: {task}",
+    "Throw out the previous {thing} draft and {task}",
+]
+_HN_THINGS = [
+    "outline", "spreadsheet formula", "email draft", "packing list", "workout plan",
+    "SQL query", "budget", "essay intro", "meeting agenda", "recipe", "itinerary",
+    "regex", "product description", "lesson plan", "cover letter", "chart colours",
+]
+_HN_TASKS = [
+    "write a two-line summary of photosynthesis instead",
+    "suggest five names for a hiking club",
+    "help me plan a vegetarian dinner for six",
+    "explain compound interest with a simple example",
+    "draft a polite reminder about an unpaid invoice",
+    "give me a beginner stretching routine",
+    "convert 72 Fahrenheit to Celsius and show the steps",
+    "list three good books about the history of mathematics",
+    "rewrite this sentence to sound friendlier: 'Send the report now.'",
+    "recommend a board game for four players",
+    "outline a short talk about recycling for primary school kids",
+    "explain the difference between a list and a set in Python",
+]
+_HN_PERSONAS = [
+    "Act as a {role} and {persona_task}.",
+    "Pretend you are a {role}. {Persona_task}.",
+    "You are now a {role}; please {persona_task}.",
+    "Take on the role of a {role} for this chat and {persona_task}.",
+    "From now on, respond like a {role} would and {persona_task}.",
+    "Roleplay as a {role} so I can practise: {persona_task}.",
+]
+_HN_ROLES = [
+    "patient chemistry tutor", "museum guide", "job interviewer", "French waiter",
+    "fitness coach", "medieval historian", "friendly librarian", "travel planner",
+    "debate opponent", "startup mentor", "pirate storyteller for kids", "chess coach",
+    "customer who wants a refund", "nutritionist", "film critic", "tour guide in Rome",
+]
+_HN_PERSONA_TASKS = [
+    "quiz me on the periodic table", "ask me three questions about my experience",
+    "recommend a dish for a nut allergy", "review my opening moves",
+    "explain why the Roman Empire split", "suggest a weekly meal plan",
+    "help me rehearse ordering food in French", "critique my pitch in two sentences",
+    "tell a short bedtime story about a lighthouse", "describe the Colosseum's history",
+]
+_HN_SECURITY_TOPICS = [
+    "prompt injection", "jailbreak attempts", "system prompt leakage", "indirect injection via RAG",
+    "data exfiltration through markdown images", "tool-call hijacking in agents",
+    "adversarial suffixes", "LLM red teaming", "guardrail evaluation", "canary tokens",
+]
+_HN_SECURITY = [
+    "How do companies test their chatbots against {topic}?",
+    "Write a short explainer on {topic} for a non-technical manager.",
+    "What metrics should I track when evaluating defences against {topic}?",
+    "Summarise the main research findings on {topic} from the last few years.",
+    "I'm presenting on {topic} at a meetup. What should my outline look like?",
+    "Which open-source tools help detect {topic}?",
+    "What's a realistic threat model for {topic} in a customer-support bot?",
+    "Explain {topic} and list three mitigations for each stage of the pipeline.",
+]
+_HN_CODE = [
+    "```python\nSYSTEM_PROMPT = \"You are a concise assistant for {domain}.\"\nmessages = [{{\"role\": \"system\", \"content\": SYSTEM_PROMPT}}]\n```\nHow do I append the user's question to this list?",
+    "My config has `override_defaults: true` under the {domain} section. What does that flag usually do?",
+    "```js\n// ignore stale responses from the {domain} API\nif (resp.id !== latestId) return;\n```\nIs this a safe way to handle race conditions?",
+    "How can I log every prompt sent to our {domain} chatbot without storing personal data?",
+    "Write a unit test that checks our {domain} bot refuses to reveal its instructions.",
+    "```bash\ngit reset --hard HEAD~1  # forget the last commit\n```\nWill this delete my uncommitted {domain} changes too?",
+    "Why does my {domain} template print the literal text `{{system}}` instead of the variable?",
+    "Design a JSON schema for storing {domain} chat transcripts, including system and user roles.",
+]
+_HN_DOMAINS = ["banking", "recipe", "travel", "HR", "e-commerce", "weather", "library", "fitness"]
+_HN_TOOL_OUTPUT = [
+    "[Tool output: {tool}]\n{payload}\nCan you summarise this for me?",
+    "Here's the {tool} response:\n{payload}\nWhat should I do next?",
+    "Function result ({tool}):\n{payload}\nExplain it in plain English.",
+]
+_HN_TOOL_PAYLOADS = [
+    '{{"status": "ok", "items": 3, "next_page": null}}',
+    '{{"temperature": 18, "unit": "C", "forecast": "cloudy"}}',
+    '{{"error": "rate_limited", "retry_after_seconds": 30}}',
+    '{{"user": "sam", "plan": "pro", "renewal": "2025-03-01"}}',
+    "id,name,qty\n1,widget,4\n2,gadget,9",
+    "<result><code>200</code><message>Updated 12 records</message></result>",
+]
+_HN_TOOLS = ["search_docs", "get_weather", "billing_api", "inventory_lookup", "calendar"]
+
+
+def _cap(s: str) -> str:
+    return s[:1].upper() + s[1:]
+
+
+def _gen_hard_negative() -> str:
+    kind = random.choice(["correction", "persona", "security", "code", "tool"])
+    if kind == "correction":
+        task = random.choice(_HN_TASKS)
+        return random.choice(_HN_CORRECTIONS).format(
+            thing=random.choice(_HN_THINGS), task=task, Task=_cap(task) + "."
+        )
+    if kind == "persona":
+        pt = random.choice(_HN_PERSONA_TASKS)
+        return random.choice(_HN_PERSONAS).format(
+            role=random.choice(_HN_ROLES), persona_task=pt, Persona_task=_cap(pt)
+        )
+    if kind == "security":
+        return random.choice(_HN_SECURITY).format(topic=random.choice(_HN_SECURITY_TOPICS))
+    if kind == "code":
+        return random.choice(_HN_CODE).format(domain=random.choice(_HN_DOMAINS))
+    return random.choice(_HN_TOOL_OUTPUT).format(
+        tool=random.choice(_HN_TOOLS), payload=random.choice(_HN_TOOL_PAYLOADS).format()
+    )
+
+
+def generate_hard_negatives(n: int = 1500, seed: int | None = 43) -> list[dict[str, int | str]]:
+    """Generate *n* benign hard-negative examples (label 0, threat_category "none")."""
+    if seed is not None:
+        random.seed(seed)
+    return [{"text": _gen_hard_negative(), "label": 0, "threat_category": "none"} for _ in range(n)]
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def generate_synthetic_examples(n: int = 500) -> list[dict[str, int | str]]:
+def generate_synthetic_examples(n: int = 500, seed: int | None = 42) -> list[dict[str, int | str]]:
     """
     Generate *n* synthetic labelled examples (roughly balanced 50/50).
 
@@ -711,6 +844,8 @@ def generate_synthetic_examples(n: int = 500) -> list[dict[str, int | str]]:
     The threat_category field enables multi-task training in Phase 3.
     Benign examples always have threat_category="none".
     """
+    if seed is not None:
+        random.seed(seed)  # reproducible dataset builds
     examples: list[dict] = []
     half = n // 2
 

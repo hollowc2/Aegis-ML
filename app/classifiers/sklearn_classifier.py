@@ -13,7 +13,9 @@ doesn't block the event loop.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +24,16 @@ import numpy as np
 from sklearn.pipeline import Pipeline
 
 logger = logging.getLogger(__name__)
+
+# FeatureUnion.transform goes through sklearn's Parallel/delayed helpers. When
+# called from an asyncio.to_thread worker, sklearn can't see the config context
+# and warns on every prediction (thousands of identical lines under load).
+# Harmless here: the union runs single-threaded either way.
+warnings.filterwarnings(
+    "ignore",
+    message=r"`sklearn\.utils\.parallel\.delayed` should be used",
+    category=UserWarning,
+)
 
 
 class SklearnClassifier:
@@ -39,6 +51,8 @@ class SklearnClassifier:
         self.model_path = model_path
         self._pipeline: Pipeline | None = None
         self._loaded = False
+        # Decision threshold tuned at training time (models/<name>.json sidecar)
+        self.threshold: float | None = None
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -51,6 +65,9 @@ class SklearnClassifier:
                 "Run 'python -m training.phase1_sklearn.train' first."
             )
         self._pipeline = joblib.load(path)
+        sidecar = path.with_suffix(".json")
+        if sidecar.exists():
+            self.threshold = json.loads(sidecar.read_text()).get("threshold")
         self._loaded = True
         logger.info("scikit-learn classifier loaded from %s", path)
 

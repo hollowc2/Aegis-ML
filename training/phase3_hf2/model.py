@@ -113,6 +113,7 @@ class AegisMTModel:
         output_dir: str | Path,
         tokenizer=None,
         temperature_scaling: float = DEFAULT_TEMPERATURE,
+        extra_config: dict | None = None,
     ) -> None:
         """
         Save model weights, config, and optionally the tokeniser.
@@ -143,6 +144,7 @@ class AegisMTModel:
             "aegis_binary_label2id": BINARY_LABEL2ID,
             "temperature_scaling": temperature_scaling,
             "dropout": self.dropout,
+            **(extra_config or {}),
         })
         with open(output_dir / "config.json", "w") as f:
             json.dump(base_config, f, indent=2)

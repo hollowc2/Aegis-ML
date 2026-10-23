@@ -36,6 +36,8 @@ os.environ.setdefault("HSA_OVERRIDE_GFX_VERSION", "11.0.0")
 import numpy as np
 import pandas as pd
 
+from training.eval_suite import preprocess
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -56,7 +58,6 @@ def evaluate(
     import torch
     from transformers import AutoTokenizer
     from sklearn.metrics import roc_auc_score, f1_score, confusion_matrix, classification_report
-    from sklearn.model_selection import train_test_split
     from training.phase3_hf2.model import AegisMTModel, THREAT2ID
 
     model_dir = model_dir or HF2_MODEL_DIR
@@ -90,10 +91,10 @@ def evaluate(
     df["text"] = df["text"].astype(str)
     df["label"] = df["label"].astype(int)
 
-    _, X_test, _, y_test = train_test_split(
-        df["text"].tolist(), df["label"].tolist(),
-        test_size=0.15, stratify=df["label"].tolist(), random_state=42,
-    )
+    # Fixed, grouped test split written by prepare_dataset.py
+    test = df[df["split"] == "test"]
+    X_test = preprocess(test["text"].astype(str).tolist())
+    y_test = test["label"].astype(int).tolist()
 
     probs, preds, latencies = [], [], []
     for text in X_test:
@@ -231,7 +232,6 @@ def evaluate_calibration(
     """
     import torch
     from transformers import AutoTokenizer
-    from sklearn.model_selection import train_test_split
     from training.phase3_hf2.model import AegisMTModel
 
     model_dir = model_dir or HF2_MODEL_DIR
@@ -251,10 +251,10 @@ def evaluate_calibration(
     module.eval()
 
     df = pd.read_csv(DATASET_CSV).dropna(subset=["text", "label"])
-    _, X_test, _, y_test = train_test_split(
-        df["text"].tolist(), df["label"].tolist(),
-        test_size=0.15, stratify=df["label"].tolist(), random_state=42,
-    )
+    # Fixed, grouped test split written by prepare_dataset.py
+    test = df[df["split"] == "test"]
+    X_test = preprocess(test["text"].astype(str).tolist())
+    y_test = test["label"].astype(int).tolist()
 
     import torch.nn.functional as F
     probs = []
@@ -294,7 +294,6 @@ def evaluate_onnx2(
 ) -> dict:
     """Evaluate the INT8 ONNX model on CPU."""
     from sklearn.metrics import roc_auc_score, f1_score, confusion_matrix
-    from sklearn.model_selection import train_test_split
 
     model_dir = model_dir or ONNX2_MODEL_DIR
     if not model_dir.exists():
@@ -331,10 +330,10 @@ def evaluate_onnx2(
     from scipy.special import softmax as scipy_softmax
 
     df = pd.read_csv(DATASET_CSV).dropna(subset=["text", "label"])
-    _, X_test, _, y_test = train_test_split(
-        df["text"].tolist(), df["label"].tolist(),
-        test_size=0.15, stratify=df["label"].tolist(), random_state=42,
-    )
+    # Fixed, grouped test split written by prepare_dataset.py
+    test = df[df["split"] == "test"]
+    X_test = preprocess(test["text"].astype(str).tolist())
+    y_test = test["label"].astype(int).tolist()
 
     probs, latencies = [], []
     for text in X_test:
@@ -379,13 +378,18 @@ def evaluate_onnx2(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate Phase 3 HF2 classifier")
-    parser.add_argument("--threshold", type=float, default=0.70)
+    parser.add_argument("--threshold", type=float, default=None,
+                        help="Defaults to the threshold tuned at training time")
     parser.add_argument("--cpu", action="store_true", help="Force CPU inference")
     parser.add_argument("--adversarial", action="store_true", help="Per-category adversarial eval")
     parser.add_argument("--calibration", action="store_true", help="Print calibration curve data")
     parser.add_argument("--onnx2", action="store_true", help="Evaluate INT8 ONNX model on CPU")
     parser.add_argument("--model-dir", type=Path, default=None, help="Override model directory")
     args = parser.parse_args()
+    if args.threshold is None:
+        from training.eval_suite import _default_threshold
+
+        args.threshold = _default_threshold("onnx2" if args.onnx2 else "hf2") or 0.5
 
     if args.onnx2:
         evaluate_onnx2(threshold=args.threshold, model_dir=args.model_dir)

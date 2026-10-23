@@ -57,6 +57,8 @@ class ONNX2Classifier:
         self._session = None
         self._tokenizer = None
         self._temperature: float = 1.0
+        # Decision threshold tuned at training time (config.json aegis_threshold)
+        self.threshold: float | None = None
         self._input_names: set[str] = set()
         self._output_names: list[str] = []
         self._threat_categories: list[str] = []
@@ -127,6 +129,11 @@ class ONNX2Classifier:
             with open(config_file) as f:
                 cfg = json.load(f)
             self._temperature = float(cfg.get("temperature_scaling", 1.0))
+            # Quantisation shifts scores, so the INT8 graph has its own threshold
+            if onnx_file.name == "model_int8.onnx":
+                self.threshold = cfg.get("aegis_threshold_int8", cfg.get("aegis_threshold"))
+            else:
+                self.threshold = cfg.get("aegis_threshold")
             id2threat: dict = cfg.get("aegis_id2threat", {})
             if id2threat:
                 max_id = max(int(k) for k in id2threat)

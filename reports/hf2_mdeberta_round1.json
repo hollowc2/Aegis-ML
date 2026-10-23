@@ -1,0 +1,283 @@
+{
+  "model": "hf2_mdeberta",
+  "threshold": 0.39729876978492734,
+  "dataset": {
+    "path": "data/combined_dataset.csv",
+    "sha256_16": "2b7b2eaecb5ef31a",
+    "rows": 16754
+  },
+  "sets": {
+    "test": {
+      "n": 1670,
+      "n_malicious": 842,
+      "n_benign": 828,
+      "recall": 0.9738717339667459,
+      "fpr": 0.01570048309178744,
+      "precision": 0.9843937575030012,
+      "f1": 0.9791044776119403,
+      "roc_auc": 0.9967325323878045,
+      "ms_per_example_batched": 5.566504850884631,
+      "breakdown": {
+        "alpaca": {
+          "n": 60,
+          "fpr": 0.016666666666666666
+        },
+        "awesome_prompts": {
+          "n": 52,
+          "fpr": 0.0
+        },
+        "deepset": {
+          "n": 25,
+          "recall": 0.8888888888888888,
+          "fpr": 0.0
+        },
+        "dolly": {
+          "n": 87,
+          "fpr": 0.0
+        },
+        "gandalf": {
+          "n": 79,
+          "recall": 1.0
+        },
+        "itw_jailbreak": {
+          "n": 51,
+          "recall": 0.7843137254901961
+        },
+        "itw_regular": {
+          "n": 98,
+          "fpr": 0.030612244897959183
+        },
+        "jackhhao": {
+          "n": 21,
+          "fpr": 0.047619047619047616
+        },
+        "multilingual_pi": {
+          "n": 83,
+          "recall": 0.9759036144578314
+        },
+        "oasst2": {
+          "n": 120,
+          "fpr": 0.008333333333333333
+        },
+        "rubend18": {
+          "n": 1,
+          "recall": 1.0
+        },
+        "seed": {
+          "n": 2,
+          "recall": 1.0
+        },
+        "spml": {
+          "n": 318,
+          "recall": 0.9917355371900827,
+          "fpr": 0.0
+        },
+        "synthetic": {
+          "n": 137,
+          "recall": 1.0,
+          "fpr": 0.0
+        },
+        "toxic_chat": {
+          "n": 147,
+          "recall": 0.75,
+          "fpr": 0.037037037037037035
+        },
+        "xtram1": {
+          "n": 389,
+          "recall": 0.9909502262443439,
+          "fpr": 0.011904761904761904
+        }
+      }
+    },
+    "external": {
+      "n": 7435,
+      "n_malicious": 1041,
+      "n_benign": 6394,
+      "recall": 0.9452449567723343,
+      "fpr": 0.02549264935877385,
+      "precision": 0.8578901482127289,
+      "f1": 0.8994515539305302,
+      "roc_auc": 0.9879540046699641,
+      "ms_per_example_batched": 3.1055847097535207,
+      "breakdown": {
+        "deepset": {
+          "n": 115,
+          "recall": 0.711864406779661,
+          "fpr": 0.0
+        },
+        "gandalf": {
+          "n": 112,
+          "recall": 0.9910714285714286
+        },
+        "jackhhao": {
+          "n": 259,
+          "recall": 0.9117647058823529,
+          "fpr": 0.008130081300813009
+        },
+        "toxic_chat": {
+          "n": 4902,
+          "recall": 0.8620689655172413,
+          "fpr": 0.032398753894081
+        },
+        "xtram1": {
+          "n": 2047,
+          "recall": 0.9768160741885626,
+          "fpr": 0.004285714285714286
+        }
+      }
+    },
+    "holdout": {
+      "n": 190,
+      "n_malicious": 102,
+      "n_benign": 88,
+      "recall": 0.7058823529411765,
+      "fpr": 0.2840909090909091,
+      "precision": 0.7422680412371134,
+      "f1": 0.7236180904522612,
+      "roc_auc": 0.7683823529411765,
+      "ms_per_example_batched": 2.992408884088754,
+      "breakdown": {
+        "benign_code": {
+          "n": 12,
+          "fpr": 0.5
+        },
+        "benign_creative": {
+          "n": 8,
+          "fpr": 0.25
+        },
+        "benign_long_document": {
+          "n": 12,
+          "fpr": 0.0
+        },
+        "benign_meta_discussion": {
+          "n": 8,
+          "fpr": 0.5
+        },
+        "benign_multilingual": {
+          "n": 16,
+          "fpr": 0.25
+        },
+        "benign_override_language": {
+          "n": 20,
+          "fpr": 0.4
+        },
+        "benign_structured_data": {
+          "n": 12,
+          "fpr": 0.08333333333333333
+        },
+        "buried_in_long_text": {
+          "n": 8,
+          "recall": 0.125
+        },
+        "direct_paraphrase": {
+          "n": 15,
+          "recall": 1.0
+        },
+        "exfiltration": {
+          "n": 12,
+          "recall": 0.75
+        },
+        "indirect_injection": {
+          "n": 15,
+          "recall": 0.3333333333333333
+        },
+        "multilingual": {
+          "n": 16,
+          "recall": 1.0
+        },
+        "obfuscation": {
+          "n": 12,
+          "recall": 0.8333333333333334
+        },
+        "prompt_extraction": {
+          "n": 12,
+          "recall": 0.8333333333333334
+        },
+        "roleplay_jailbreak": {
+          "n": 12,
+          "recall": 0.5
+        }
+      }
+    },
+    "adversarial": {
+      "n": 320,
+      "n_malicious": 280,
+      "n_benign": 40,
+      "recall": 1.0,
+      "fpr": 0.2,
+      "precision": 0.9722222222222222,
+      "f1": 0.9859154929577464,
+      "roc_auc": 0.97625,
+      "ms_per_example_batched": 1.6252745499514276,
+      "breakdown": {
+        "base64_encoded": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "benign_context_manipulation": {
+          "n": 20,
+          "fpr": 0.3
+        },
+        "benign_security_hard_negative": {
+          "n": 20,
+          "fpr": 0.1
+        },
+        "code_block_injection": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "continuation_attack": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "indirect_injection": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "invisible_char_injection": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "many_shot_jailbreak": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "multilingual_evasion": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "nested_role_confusion": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "paraphrase_attack": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "structured_data_injection": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "sycophantic_setup": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "token_smuggling": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "unicode_homoglyph": {
+          "n": 20,
+          "recall": 1.0
+        },
+        "virtual_prompt_injection": {
+          "n": 20,
+          "recall": 1.0
+        }
+      }
+    }
+  },
+  "base_model": "microsoft/mdeberta-v3-base",
+  "temperature": 0.7316835113741201,
+  "max_val_fpr": 0.02
+}

@@ -27,11 +27,15 @@ from pathlib import Path
 import gradio as gr
 import httpx
 
+from app.classifiers import resolve_threshold
+
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 AEGIS_API_URL = os.getenv("AEGIS_API_URL", "http://localhost:8000")
 DEMO_PORT = int(os.getenv("DEMO_PORT", "7860"))
-CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.70"))
+# Unset = each model's threshold tuned at training time
+_THRESHOLD_ENV = os.getenv("CONFIDENCE_THRESHOLD")
+CONFIDENCE_THRESHOLD = float(_THRESHOLD_ENV) if _THRESHOLD_ENV else None
 
 # ── Demo mode classifiers (lazy-loaded, cached per type) ─────────────────────
 
@@ -127,7 +131,7 @@ async def _classify_locally(
         return False, 0.1, "No threat patterns detected", True
 
     result = await clf.predict(text)
-    is_mal = result["malicious_prob"] >= CONFIDENCE_THRESHOLD
+    is_mal = result["malicious_prob"] >= resolve_threshold(CONFIDENCE_THRESHOLD, clf)
     return (
         is_mal,
         result["malicious_prob"],
@@ -276,7 +280,9 @@ async def chat_with_aegis(
 
 
 # ── Evasive Threats examples ──────────────────────────────────────────────────
-# 31 prompts that pass sklearn (< 0.70) but are caught by HF (≥ 0.70).
+# 32 prompts that bypassed the original word-only TF-IDF model. With each
+# model's tuned threshold, the retrained sklearn model (char n-grams) catches
+# 28/32 and the Phase 3 mDeBERTa model 30/32.
 # Grouped by category for the tabbed display in build_ui().
 
 EVASIVE_THREATS_UNICODE = [
@@ -488,18 +494,18 @@ def build_ui(available_classifiers: list[str] | None = None) -> gr.Blocks:
                     )
 
         # ── Evasive Threats ───────────────────────────────────────────────────
-        with gr.Accordion("⚠️ Evasive Threats — Bypass sklearn, caught by HF/HF2", open=False):
+        with gr.Accordion("⚠️ Evasive Threats — Obfuscated and indirect attacks", open=False):
             gr.Markdown(
-                "These 31 prompts scored **below 0.70** on the TF-IDF classifier (Phase 1) "
-                "but were correctly flagged by fine-tuned DistilBERT (Phase 2) and "
-                "multi-task DeBERTa-v3 (Phase 3). "
+                "These 32 prompts all slipped past the original word-only TF-IDF classifier. "
+                "The retrained Phase 1 model (word + character n-grams) now catches 28 of them "
+                "and the Phase 3 multi-task mDeBERTa model catches 30. "
                 "Click any example to load it into the message field — switch the classifier "
                 "between **sklearn**, **hf**, and **hf2** to see the difference live."
             )
             with gr.Tabs():
                 with gr.Tab("Unicode Homoglyph (10)"):
                     gr.Markdown(
-                        "*Cyrillic lookalike characters (е, а, і) break TF-IDF token matching. HF reads subword tokens and catches the meaning regardless.*"
+                        "*Cyrillic lookalike characters (е, а, і) break word-level token matching. Character n-grams and subword transformers still see the surrounding pieces and catch the intent.*"
                     )
                     gr.Examples(
                         examples=EVASIVE_THREATS_UNICODE,
@@ -582,7 +588,7 @@ def build_ui(available_classifiers: list[str] | None = None) -> gr.Blocks:
             **Key security properties:**
             - **Fail-secure**: Any classifier error → block the request
             - **Canary tokens**: Detect successful injections in the output
-            - **Configurable threshold**: Default 0.70, tune to hit <5% FPR
+            - **Tuned thresholds**: each model ships the threshold chosen on validation data for a ≤2% false-positive rate; override with `CONFIDENCE_THRESHOLD`
             - **Full audit log**: Every decision stored in SQLite
             """)
 
