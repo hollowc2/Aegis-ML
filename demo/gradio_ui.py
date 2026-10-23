@@ -243,8 +243,8 @@ async def chat_with_aegis(
             model_label = {
                 "sklearn": "TF-IDF + LogReg (Phase 1)",
                 "hf": "DistilBERT/DeBERTa (Phase 2)",
-                "hf2": "DeBERTa-v3 Multi-Task (Phase 3)",
-                "onnx2": "DeBERTa-v3 Multi-Task ONNX (Phase 3)",
+                "hf2": "mDeBERTa-v3 Multi-Task (Phase 3)",
+                "onnx2": "mDeBERTa-v3 Multi-Task ONNX INT8 (Phase 3)",
             }.get(classifier_type, classifier_type)
         analysis_lines.append(f"**Model:** {model_label}")
         analysis_lines.append(f"**Verdict:** {'🚫 BLOCKED' if is_malicious else '✅ ALLOWED'}")
@@ -570,7 +570,7 @@ def build_ui(available_classifiers: list[str] | None = None) -> gr.Blocks:
             [1] Input Guardrail
                 • Phase 1: TF-IDF + Logistic Regression (sklearn)
                 • Phase 2: Fine-tuned DistilBERT / DeBERTa-v3-small (hf)
-                • Phase 3: Multi-task DeBERTa-v3, 15 categories (hf2 / onnx2)
+                • Phase 3: Multi-task mDeBERTa-v3, 7 categories (hf2 / onnx2)
                 ↓ (blocked if malicious — 403 Forbidden)
             [2] Canary Token Injection
                 • Random unique token embedded in system prompt
