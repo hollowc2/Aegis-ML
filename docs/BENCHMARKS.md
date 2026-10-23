@@ -403,3 +403,116 @@ The retained candidate aggregate report lets the acceptance summary be
 regenerated without loading a rejected model. Transformer retraining/export
 commands in the earlier reproduction section are not evidence of execution
 for this failed round.
+
+
+## Round 2: narrowed diagnosis and fresh false-positive set (2026-10-23)
+
+**Outcome: no candidate model was trained; released models are unchanged**
+(SHA256 re-verified in [`reports/round2/summary.json`](../reports/round2/summary.json)).
+The planned round needed new attack-side data: fresh indirect, exfiltration
+and buried evaluation cases, attack additions for training, and benign
+security-topic training negatives. Authoring or assembling that data was
+stopped by a safety classifier. With the maintainer's approval, the round
+was narrowed to three parts: a train/val diagnosis of the rejected
+experiment, a benign-only fresh final set, and the base-pool arm. **Not run:**
+arms B1–B3, the context-aware variant, mDeBERTa retraining, ONNX export, and
+every after-measurement. These are not passes.
+
+### Diagnosis of the rejected experiment (train/val only)
+
+[`reports/round2/diagnosis.json`](../reports/round2/diagnosis.json),
+built by `training/round2/diagnose.py`. The rejected sklearn candidate was recovered by
+retraining from its recorded recipe, and its val threshold was reproduced
+exactly (0.48513361631912105). A stage-by-stage rebuild of both datasets
+matches the original row count but only ~75% of rows, because of upstream
+sampling-order drift. Its stage counts are therefore indicative only. Every
+comparison below uses the committed CSVs.
+
+| Hypothesis | Verdict | Evidence |
+|---|---|---|
+| Hard-negative priority displaced ordinary benign rows | Not supported as a count; composition shifted | Ordinary benign rows rose 7,328 → 8,463, but only 3,226 original rows were retained; hard negatives rose 1,049 → 2,812 |
+| Repetitive carriers / explicit takeover phrases created shortcuts | Supported for attack vocabulary; carrier shortcut not supported | 67% of new attack rows contain takeover words (0% of their benign controls); 57% vs 4% contain destinations; a 3-feature surface model reaches 0.97 val AUC on those rows; removing the payload drops flags 100% → 0% |
+| Labels need authorization/provenance context | Unresolved | No context-paired development data could be built |
+| 512-token truncation hides evidence | Partly supported (transformers only) | 44% of long-document val scan windows exceed 512 tokens |
+| Overall val AUC hid weak slices | Supported | Candidate own-val FPR 1.97%, but 3.3% vs 1.3% for the baseline on the 1,265 rows that are val in both datasets; legacy templated hard-negative FPR 0% → 9.5%; long-document FPR through the input guard 4.7% → 13.6% |
+
+The candidate's own validation split was padded with easy new slices:
+security discussion 0.6% FPR, imperative documents 0% FPR, generated
+exfiltration 100% recall. That is how it passed val and then failed external.
+Future arms need shared validation slices and a common-row comparison
+before any external run.
+
+### Base pool (B0)
+
+The base pool is the original training data minus every row that overlaps an
+evaluation set: exact text, served scan windows, and reserved payload
+substrings. **Zero rows were removed**, so it equals the released training data
+(`0c6e12ed82b86e36`). The fixed grid reselected the release parameters
+(C=16, 100k char features; val threshold 0.55440). The selection rule and
+gates were frozen beforehand ([`data/round2/protocol.json`](../data/round2/protocol.json)).
+GPU training was not warranted: B0 matches the release, and the
+security-benign val gate cannot be evaluated (24 annotated rows, below the
+50-row minimum).
+
+### Fresh false-positive final set
+
+`data/round2/final_fp_eval.csv`: 467 benign rows, SHA256 prefix
+`495339890e79916f`, frozen before scoring
+([manifest](../data/round2/final_fp_eval.manifest.json)). Composition:
+
+- 266 authored rows: 110 security-topic requests (including 20 authorized-sharing
+  requests and 10 quoted controls), 118 documents across 16 carriers,
+  36 long documents of 5k–37.5k characters, and 2 size-limit documents.
+- 160 LLMail-Inject false-positive-test emails.
+- 41 AgentDojo records with default, uninjected values.
+
+The authored rows were written by a separate agent instance that was given
+only category definitions and serving constraints. That is the same model
+family as the developer agent, so independence is weaker than human
+authorship. Most long documents are 5–6.5k characters, so longer lengths are
+thinly covered. Every row carries the full chat request, and is scored both
+as a single string and through the real input guard at unchanged serving
+thresholds. It contains no attacks, so it measures false positives only.
+
+Released baselines, input-guard FPR % (k/n, 95% Wilson interval). There were no
+classifier errors. Both size-limit rows were blocked as too large to scan;
+they are counted separately and excluded from these rows.
+
+| Model | All (n=465) | Security-topic (n=110) | Documents (n=319) | Long documents (n=36) |
+|---|---:|---:|---:|---:|
+| sklearn | 2.6 (12) [1.5–4.5] | 2.7 (3) [0.9–7.7] | 1.9 (6) [0.9–4.0] | 8.3 (3) [2.9–21.8] |
+| mDeBERTa (hf2) | 0.9 (4) [0.3–2.2] | 1.8 (2) [0.5–6.4] | 0.3 (1) [0.1–1.8] | 2.8 (1) [0.5–14.2] |
+| cascade2 → hf2 | 0.9 (4) [0.3–2.2] | 1.8 (2) [0.5–6.4] | 0.3 (1) [0.1–1.8] | 2.8 (1) [0.5–14.2] |
+| ONNX INT8 | 1.7 (8) [0.9–3.4] | 1.8 (2) [0.5–6.4] | 0.9 (3) [0.3–2.7] | 8.3 (3) [2.9–21.8] |
+
+Single-string FPR is lower: 1.9 / 0.4 / 0.4 / 1.1%. Long documents are where
+windowing adds false positives. On this independently authored set,
+mDeBERTa's security-topic FPR is 1.8%, not the 22% measured on the earlier
+targeted set. The earlier figure appears specific to that set's style. The
+interval's upper bound (6.4%) still exceeds 5%, and these are baseline
+measurements, not a round-2 improvement. Per-model reports:
+`reports/round2/*_fp_baseline.json`.
+
+### Acceptance disposition
+
+- **NOT RUN:** external sklearn/mDeBERTa (no candidate), fresh target-category
+  recall (no fresh attack cases), existing targeted/holdout after-scores.
+- **BASELINE ONLY:** fresh security-topic mDeBERTa FPR 1.8% (2/110).
+- **PASS:** `pytest tests/` 88 passed, 18 skipped (opt-in adversarial
+  regression tests, not counted); `ruff check` and `ruff format --check` on
+  `app demo tests training/round2`.
+
+### Reproduce
+
+The local venv and CPU pinning are as above. Artifacts go to
+`~/.cache/aegis-ml-round2` (`AEGIS_ROUND2_ROOT`); `/tmp` is tmpfs and was lost
+on reboot last round. Round-2 runners refuse to write under `models/`, the
+release reports or the frozen sets.
+
+```bash
+taskset -c 0-3 uv run python -m training.round2.diagnose
+taskset -c 0-3 uv run python -m training.round2.final_fp_eval     # refuses to overwrite
+taskset -c 0-3 uv run python -m training.round2.score_final --model sklearn --name sklearn_fp_baseline
+# hf2, cascade2_hf2, and onnx2 with ONNX2_USE_INT8=true, one at a time
+taskset -c 0-3 uv run python -m training.round2.base_pool
+```

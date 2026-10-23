@@ -45,3 +45,22 @@ No new non-commercial sources are added. Existing toxic-chat (CC BY-NC 4.0),
 Dolly (CC BY-SA 3.0) and other legacy sources retain their original terms;
 this work does not remove those existing restrictions. Copies of the new
 MIT notices are in `docs/data_licenses/`.
+
+## Round 2 additions (2026-10-23)
+
+Only **benign** material from these sources is used, in the frozen
+false-positive set `data/round2/final_fp_eval.csv`. Nothing from them is
+used for training.
+
+- [LLMail-Inject](https://huggingface.co/datasets/microsoft/llmail-inject-challenge/tree/1063bdf01ec8762b812d5e06ee768a06faa5a6f7):
+  MIT (dataset card; repository licence at commit
+  `3da2399839b285e129888161fcc8cb03169d1b43`, copied to
+  `docs/data_licenses/LLMail-Inject.txt`). Used: `data/emails_for_fp_tests.json`
+  (160 unique benign emails). Challenge attack submissions are not used.
+- [AgentDojo](https://github.com/ethz-spylab/agentdojo/tree/089ed468cf3ed0322acc66b0211f26d9d90dbf60):
+  MIT (`docs/data_licenses/AgentDojo.txt`). Used: 41 environment records from
+  the four v1 suites, with every injection vector set to its benign default
+  value. Injection tasks and attack strings are not used. The YAML is read as
+  data; no downloaded code is executed.
+- Authored benign cases (266 rows) were written by a separate agent instance
+  under this repository's MIT licence.

@@ -57,6 +57,7 @@ AGENTDOJO_TASKS = {
 
 
 def windows(text: str) -> int:
+    """Scan windows for one message before serving de-duplicates identical windows."""
     step = SEGMENT_CHARS - SEGMENT_OVERLAP
     return 1 if len(text) <= SEGMENT_CHARS else len(range(0, len(text) - SEGMENT_OVERLAP, step))
 
@@ -68,8 +69,11 @@ def build_messages(text: str, scan_role: str, user_task: str, system: str) -> tu
         content = f"{user_task}\n\n{text}" if user_task else text
         msgs.append({"role": "user", "content": content})
         return msgs, content
-    msgs += [{"role": "user", "content": user_task or "Please summarize this."},
-             {"role": "assistant", "content": ""}, {"role": "tool", "content": text}]
+    msgs += [
+        {"role": "user", "content": user_task or "Please summarize this."},
+        {"role": "assistant", "content": ""},
+        {"role": "tool", "content": text},
+    ]
     return msgs, text
 
 
@@ -82,49 +86,91 @@ def build() -> tuple[pd.DataFrame, dict]:
     for row in raw:
         row["source"] = "authored_round2_benign"
     for k, email in enumerate(llmail_benign_emails()["fp_tests"]):
-        raw.append(dict(case_id=f"llmail-fp-{k:03d}", text=email, category="benign_document",
-                        subcategory="llmail_fp_email", carrier="email", family_id=f"llmail-fp-{k:03d}",
-                        pair_id="", scan_role=("tool", "user")[k % 2],
-                        user_task="Summarize all following emails.", context_required=False,
-                        source="llmail_fp_tests"))
+        raw.append(
+            dict(
+                case_id=f"llmail-fp-{k:03d}",
+                text=email,
+                category="benign_document",
+                subcategory="llmail_fp_email",
+                carrier="email",
+                family_id=f"llmail-fp-{k:03d}",
+                pair_id="",
+                scan_role=("tool", "user")[k % 2],
+                user_task="Summarize all following emails.",
+                context_required=False,
+                source="llmail_fp_tests",
+            )
+        )
     for k, record in enumerate(agentdojo_records()):
-        raw.append(dict(case_id=f"agentdojo-{k:03d}", text=render_record(record),
-                        category="benign_document", subcategory="agentdojo_default",
-                        carrier=f"{record['suite']}_record",
-                        family_id=f"agentdojo:{record['suite']}:{record['file']}", pair_id="",
-                        scan_role="tool", user_task=AGENTDOJO_TASKS[record["suite"]],
-                        context_required=False, source="agentdojo_default"))
+        raw.append(
+            dict(
+                case_id=f"agentdojo-{k:03d}",
+                text=render_record(record),
+                category="benign_document",
+                subcategory="agentdojo_default",
+                carrier=f"{record['suite']}_record",
+                family_id=f"agentdojo:{record['suite']}:{record['file']}",
+                pair_id="",
+                scan_role="tool",
+                user_task=AGENTDOJO_TASKS[record["suite"]],
+                context_required=False,
+                source="agentdojo_default",
+            )
+        )
     rows = []
     for row in raw:
-        messages, scanned = build_messages(row["text"], row["scan_role"], row.get("user_task", ""),
-                                           rng.choice(SYSTEM_PROMPTS))
-        rows.append(dict(case_id=row["case_id"], text=scanned, label=0, category=row["category"],
-                         subcategory=row["subcategory"], carrier=row["carrier"],
-                         family_id=row["family_id"], pair_id=row.get("pair_id", ""),
-                         scan_role=row["scan_role"], context_required=bool(row["context_required"]),
-                         messages_json=json.dumps(messages), source=row["source"],
-                         request_windows=sum(windows(m["content"]) for m in messages
-                                             if m["content"].strip())))
+        messages, scanned = build_messages(
+            row["text"], row["scan_role"], row.get("user_task", ""), rng.choice(SYSTEM_PROMPTS)
+        )
+        rows.append(
+            dict(
+                case_id=row["case_id"],
+                text=scanned,
+                label=0,
+                category=row["category"],
+                subcategory=row["subcategory"],
+                carrier=row["carrier"],
+                family_id=row["family_id"],
+                pair_id=row.get("pair_id", ""),
+                scan_role=row["scan_role"],
+                context_required=bool(row["context_required"]),
+                messages_json=json.dumps(messages),
+                source=row["source"],
+                request_windows=sum(
+                    windows(m["content"]) for m in messages if m["content"].strip()
+                ),
+            )
+        )
     df = pd.DataFrame(rows)
     validation = validate(df)
     manifest = {
-        "protocol": ("Frozen before any round-2 training. Aggregate metrics only; never "
-                     "inspect individual misses, mine it for training, or tune on it."),
+        "protocol": (
+            "Frozen before any round-2 training. Aggregate metrics only; never "
+            "inspect individual misses, mine it for training, or tune on it."
+        ),
         "label": "all rows benign (label 0); false-positive evaluation only",
-        "author_statement": ("Authored rows were written by a separate agent instance given only "
-                             "category definitions and serving constraints; same model family as "
-                             "the developer agent, so independence is weaker than independent "
-                             "human authorship. The developer agent did not read the rows."),
+        "author_statement": (
+            "Authored rows were written by a separate agent instance given only "
+            "category definitions and serving constraints; same model family as "
+            "the developer agent, so independence is weaker than independent "
+            "human authorship. The developer agent did not read the rows."
+        ),
         "date": "2026-10-23",
-        "licences": {"authored_round2_benign": "MIT (original)", "llmail_fp_tests": "MIT",
-                     "agentdojo_default": "MIT"},
+        "licences": {
+            "authored_round2_benign": "MIT (original)",
+            "llmail_fp_tests": "MIT",
+            "agentdojo_default": "MIT",
+        },
         "revisions": {"llmail_inject_challenge": LLMAIL_REV, "agentdojo": AGENTDOJO_REV},
-        "source_sha256": {k: v for k, v in digests.items()
-                          if "emails_for_fp" in k or "agentdojo" in k},
+        "source_sha256": {
+            k: v for k, v in digests.items() if "emails_for_fp" in k or "agentdojo" in k
+        },
         "authored_sha256": AUTHORED_SHA256,
         "rows": int(len(df)),
-        "counts": {f"{c}/{s}": int(n) for (c, s), n in
-                   df.groupby(["category", "subcategory"]).size().items()},
+        "counts": {
+            f"{c}/{s}": int(n)
+            for (c, s), n in df.groupby(["category", "subcategory"]).size().items()
+        },
         "counts_by_source": df.source.value_counts().to_dict(),
         "families": int(df.family_id.nunique()),
         "pairs": int(df.pair_id.replace("", pd.NA).dropna().nunique()),
@@ -144,13 +190,18 @@ def validate(df: pd.DataFrame) -> dict:
     for row in df.itertuples():
         messages = json.loads(row.messages_json)
         if sum(m["role"] == row.scan_role and m["content"] == row.text for m in messages) != 1:
-            raise ValueError(f"{row.case_id}: scanned text is not exactly one {row.scan_role} message")
+            raise ValueError(
+                f"{row.case_id}: scanned text is not exactly one {row.scan_role} message"
+            )
     over = df.request_windows > MAX_SEGMENTS
     if (over != (df.category == "size_limit_benign")).any():
         raise ValueError("size-limit category must be exactly the rows over the window cap")
-    return {"unique_texts": True, "scan_role_consistent": True,
-            "size_limit_rows_over_cap": int(over.sum()),
-            "max_windows_non_size_limit": int(df.request_windows[~over].max())}
+    return {
+        "unique_texts": True,
+        "scan_role_consistent": True,
+        "size_limit_rows_over_cap": int(over.sum()),
+        "max_windows_non_size_limit": int(df.request_windows[~over].max()),
+    }
 
 
 def main() -> None:

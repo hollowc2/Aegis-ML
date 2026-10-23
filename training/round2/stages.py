@@ -35,8 +35,12 @@ def _length_balance(df: pd.DataFrame, hard_sources) -> tuple[pd.DataFrame, list[
     parts, log = [], []
     for b, g in df.groupby(bucket):
         n = int(g["label"].value_counts().min()) if g["label"].nunique() == 2 else 0
-        entry = {"bucket": int(b), "benign_in": int((g.label == 0).sum()),
-                 "malicious_in": int((g.label == 1).sum()), "kept_each": n}
+        entry = {
+            "bucket": int(b),
+            "benign_in": int((g.label == 0).sum()),
+            "malicious_in": int((g.label == 1).sum()),
+            "kept_each": n,
+        }
         for label, gl in g.groupby("label"):
             shuffled = gl.sample(frac=1, random_state=42)
             priority = shuffled["source"].isin(hard_sources)
@@ -126,9 +130,16 @@ def build(recipe: str, raw_sources: list[pd.DataFrame] | None = None) -> dict:
         frames.append(pd.DataFrame(generate_targeted_examples(tokenizer)))
         bipia = []
         for row in training_rows():
-            bipia.extend(window_rows(row["text"], row.get("payload", ""), group="bipia:train",
-                                     source=row["source"], category=row["threat_category"],
-                                     tokenizer=tokenizer))
+            bipia.extend(
+                window_rows(
+                    row["text"],
+                    row.get("payload", ""),
+                    group="bipia:train",
+                    source=row["source"],
+                    category=row["threat_category"],
+                    tokenizer=tokenizer,
+                )
+            )
         frames.append(pd.DataFrame(bipia))
         raw = pd.concat(frames, ignore_index=True)
         raw["split_group"] = pdx.split_groups(raw)
@@ -142,24 +153,41 @@ def build(recipe: str, raw_sources: list[pd.DataFrame] | None = None) -> dict:
         manifest = json.loads(pdx.TARGETED_CSV.with_suffix(".manifest.json").read_text())
         reserved = {pdx.normalise_key(p) for p in manifest["reserved_payloads"]}
         for text in pd.read_csv(pdx.TARGETED_CSV).text:
-            req = ChatCompletionRequest(model="overlap-check",
-                                        messages=[ChatMessage(role="user", content=text)])
+            req = ChatCompletionRequest(
+                model="overlap-check", messages=[ChatMessage(role="user", content=text)]
+            )
             forbidden.update(pdx.normalise_key(w) for w in _extract_segments(req))
         leaked = pool["key"].isin(forbidden) | pool["key"].map(
-            lambda key: any(p in key for p in reserved if p))
+            lambda key: any(p in key for p in reserved if p)
+        )
         pool = pool[~leaked]
         stages["eval_excluded"] = pool
         caps = {s.source: s.cap for s in pdx.SOURCES if s.cap and not s.external}
-        caps.update(targeted_indirect=1800, targeted_exfil=1800, targeted_carrier_benign=2200,
-                    synthetic_hardneg=2200, bipia_email_train=900, bipia_email_benign=300)
+        caps.update(
+            targeted_indirect=1800,
+            targeted_exfil=1800,
+            targeted_carrier_benign=2200,
+            synthetic_hardneg=2200,
+            bipia_email_train=900,
+            bipia_email_benign=300,
+        )
         pool = pdx._cap_sources(pool, caps)
         stages["capped"] = pool
         pool, length_log = _length_balance(pool, pdx.HARD_NEGATIVE_SOURCES)
         stages["length_balanced"] = pool
         pool["split"] = pool["split_group"].map(pdx._split_group_for)
         final = pool.drop(columns="key").sample(frac=1, random_state=42).reset_index(drop=True)
-        csv_columns = ["text", "label", "threat_category", "source", "template_id", "payload",
-                       "carrier_id", "split_group", "split"]
+        csv_columns = [
+            "text",
+            "label",
+            "threat_category",
+            "source",
+            "template_id",
+            "payload",
+            "carrier_id",
+            "split_group",
+            "split",
+        ]
 
     buf = io.StringIO()
     final[csv_columns].to_csv(buf, index=False)

@@ -54,9 +54,7 @@ _ALLOWED_ROOTS = (DATA.resolve(), REPORTS.resolve(), ARTIFACTS.resolve())
 def safe_output(path: str | Path) -> Path:
     """Return *path* if it is an allowed round-2 output, else raise."""
     resolved = Path(path).expanduser().resolve()
-    if resolved in _PROTECTED_FILES or any(
-        resolved.is_relative_to(d) for d in _PROTECTED_DIRS
-    ):
+    if resolved in _PROTECTED_FILES or any(resolved.is_relative_to(d) for d in _PROTECTED_DIRS):
         raise PermissionError(f"Refusing to write protected release artifact: {path}")
     if not any(resolved.is_relative_to(root) for root in _ALLOWED_ROOTS):
         raise PermissionError(f"Round-2 outputs must live under {_ALLOWED_ROOTS}: {path}")

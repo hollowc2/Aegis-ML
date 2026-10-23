@@ -11,6 +11,8 @@ Evaluation sets:
   targeted     — frozen public test sources + independently authored cases
   adversarial  — generator-derived regression suite (data/adversarial_eval.csv);
                  shares vocabulary with synthetic_gen.py, so treat as optimistic
+  round2_fp    — frozen round-2 benign-only set (data/round2/final_fp_eval.csv);
+                 false-positive evidence only, scored per model once before training
 
 Texts are passed through the serving-path TextPreprocessor before scoring, so
 the numbers match what the API sees with ENABLE_TEXT_PREPROCESSING=true.
@@ -52,6 +54,8 @@ EVAL_SETS: dict[str, tuple[Path, str]] = {
     "holdout": (Path("data/holdout_eval.csv"), "category"),
     "targeted": (Path("data/targeted_eval.csv"), "category"),
     "adversarial": (Path("data/adversarial_eval.csv"), "category"),
+    # Round-2 frozen false-positive set (all benign); see training/round2/final_fp_eval.py.
+    "round2_fp": (Path("data/round2/final_fp_eval.csv"), "category"),
 }
 REPORTS_DIR = Path("reports")
 

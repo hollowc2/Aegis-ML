@@ -1,0 +1,203 @@
+{
+  "status": "narrowed round complete; no candidate model trained; released artifacts unchanged",
+  "scope_change": "Authoring/assembling attack-side data (fresh attack eval cases, indirect/exfiltration training additions) and benign security-topic training negatives was stopped by a safety classifier. With the user's approval the round was narrowed to diagnosis, a benign-only fresh final set, and the base-pool arm.",
+  "released_artifacts_sha256_verified_unchanged": {
+    "models/sklearn_classifier.joblib": "e3ac2e9cee413838948dfe6c1b4084d9f8731dc8596bac014aa9f5da7d58d8a7",
+    "models/sklearn_classifier.json": "ec8c91d69afee1bb7318b3c391b2fc2795824329a9486ffa18a8a1cc155621ff",
+    "models/hf2_classifier/model.pt": "2379314f42141052cca18164c17f4969d8d9716ae5845ee54eae328c68b5e612",
+    "models/hf2_classifier/config.json": "bbdff8964ee762d0d08d143008d50c596ab8c6bfcbf3db8a87a9802d59f77fa4",
+    "models/hf2_classifier_onnx/model.onnx.data": "a149f652752f761b79f650c178e530011ac3506cf3e302604dcf41e6eba9c39e",
+    "models/hf2_classifier_onnx/model_int8.onnx": "7d4f7e4caaedea3339a8f4c2054c80cf333c4dd90be7bf74087135822bbfcaf7",
+    "models/hf2_classifier_onnx/config.json": "524f9f4b26e60cc34108765836d065ec085b2f0c8531ba9617c8e9da3b285c51",
+    "data/external_eval.csv": "580e5a966bf72cd0387c3f4600c296f42ec94fd605740da05a2148b787ac6474",
+    "data/targeted_eval.csv": "e049ed098724e00357b2de19c8b465d6d7ab78a5e834965170c3009d1535c804",
+    "data/holdout_eval.csv": "92b929ee4ffab967860c65757044583e5c019992d65d7d1497c571a0fdd0aae1"
+  },
+  "hypotheses": {
+    "H1_hard_negative_priority_displaced_ordinary_benign": {
+      "verdict": "not supported as a loss in count; composition shifted",
+      "evidence": "ordinary benign 7,328 -> 8,463 rows, but only 3,226 original ordinary benign rows retained; hard negatives 1,049 -> 2,812; 0 shared rows changed split (diagnosis.dataset)"
+    },
+    "H2_repetitive_carriers_or_explicit_phrases_created_shortcuts": {
+      "verdict": "supported for explicit attack vocabulary/destinations; carrier shortcut not supported",
+      "evidence": "targeted malicious rows: takeover vocabulary 67% vs 0% of their benign controls, destinations 57% vs 4%; 3-feature surface model val AUC 0.97 on targeted rows; removing the payload drops flags 100% -> 0% (diagnosis.shortcut_probes, counterfactuals)"
+    },
+    "H3_labels_need_authorization_or_provenance_context": {
+      "verdict": "unresolved",
+      "evidence": "no context-paired development data could be built this round; the context-aware variant was not run"
+    },
+    "H4_512_token_truncation_hides_evidence": {
+      "verdict": "partly supported for transformers; not applicable to sklearn",
+      "evidence": "44% of long-document val scan windows exceed 512 tokens (diagnosis.long_documents); 6.9% of benign / 3.9% of malicious rejected-val rows exceed 512 tokens whole-string"
+    },
+    "H5_overall_val_auc_concealed_weak_slices": {
+      "verdict": "supported",
+      "evidence": "candidate own-val FPR 1.97% (AUC 0.994) but 3.3% vs baseline 1.3% on the 1,265 rows val in both datasets; legacy templated hard-negative FPR 0% -> 9.5%; input-guard long-document FPR 4.7% -> 13.6%"
+    }
+  },
+  "rejected_candidate": "recovered by retraining (val threshold reproduced exactly: 0.48513361631912105); stored outside the repo at ~/.cache/aegis-ml-round2/models/rejected_candidate_repro.joblib",
+  "b0": "base pool identical to the released training data (no evaluation overlap; sha256 prefix 0c6e12ed82b86e36); fixed grid reselected C=16, 100k char features; val threshold 0.55440",
+  "gpu_training": "not run: only B0 available; security-benign val gate not evaluable (24 annotated rows < 50) per the frozen protocol",
+  "fresh_fp_set_baseline": {
+    "sklearn": {
+      "whole_string_fpr": {
+        "k": 9,
+        "n": 465,
+        "rate": 0.01935483870967742,
+        "ci95": [
+          0.010215281779375002,
+          0.03637102796788291
+        ]
+      },
+      "input_guard_fpr": {
+        "k": 12,
+        "n": 465,
+        "rate": 0.025806451612903226,
+        "ci95": [
+          0.01482270464304318,
+          0.04456110430223812
+        ]
+      },
+      "security_benign_fpr_input_guard": {
+        "k": 3,
+        "n": 110,
+        "rate": 0.02727272727272727,
+        "ci95": [
+          0.009317801045153465,
+          0.07713214343911239
+        ]
+      },
+      "long_document_fpr_input_guard": {
+        "k": 3,
+        "n": 36,
+        "rate": 0.08333333333333333,
+        "ci95": [
+          0.0287480892712918,
+          0.21827010276918848
+        ]
+      }
+    },
+    "hf2": {
+      "whole_string_fpr": {
+        "k": 2,
+        "n": 465,
+        "rate": 0.004301075268817204,
+        "ci95": [
+          0.0011802787795997735,
+          0.015545199505603586
+        ]
+      },
+      "input_guard_fpr": {
+        "k": 4,
+        "n": 465,
+        "rate": 0.008602150537634409,
+        "ci95": [
+          0.003350093905373084,
+          0.02190705051184586
+        ]
+      },
+      "security_benign_fpr_input_guard": {
+        "k": 2,
+        "n": 110,
+        "rate": 0.01818181818181818,
+        "ci95": [
+          0.005000250085743785,
+          0.06388142410014258
+        ]
+      },
+      "long_document_fpr_input_guard": {
+        "k": 1,
+        "n": 36,
+        "rate": 0.027777777777777776,
+        "ci95": [
+          0.004920280295569679,
+          0.141700337350308
+        ]
+      }
+    },
+    "cascade2_hf2": {
+      "whole_string_fpr": {
+        "k": 2,
+        "n": 465,
+        "rate": 0.004301075268817204,
+        "ci95": [
+          0.0011802787795997735,
+          0.015545199505603586
+        ]
+      },
+      "input_guard_fpr": {
+        "k": 4,
+        "n": 465,
+        "rate": 0.008602150537634409,
+        "ci95": [
+          0.003350093905373084,
+          0.02190705051184586
+        ]
+      },
+      "security_benign_fpr_input_guard": {
+        "k": 2,
+        "n": 110,
+        "rate": 0.01818181818181818,
+        "ci95": [
+          0.005000250085743785,
+          0.06388142410014258
+        ]
+      },
+      "long_document_fpr_input_guard": {
+        "k": 1,
+        "n": 36,
+        "rate": 0.027777777777777776,
+        "ci95": [
+          0.004920280295569679,
+          0.141700337350308
+        ]
+      }
+    },
+    "onnx2_int8": {
+      "whole_string_fpr": {
+        "k": 5,
+        "n": 465,
+        "rate": 0.010752688172043012,
+        "ci95": [
+          0.00460134021972412,
+          0.024921637263502622
+        ]
+      },
+      "input_guard_fpr": {
+        "k": 8,
+        "n": 465,
+        "rate": 0.017204301075268817,
+        "ci95": [
+          0.00874279170235364,
+          0.03357768497889648
+        ]
+      },
+      "security_benign_fpr_input_guard": {
+        "k": 2,
+        "n": 110,
+        "rate": 0.01818181818181818,
+        "ci95": [
+          0.005000250085743785,
+          0.06388142410014258
+        ]
+      },
+      "long_document_fpr_input_guard": {
+        "k": 3,
+        "n": 36,
+        "rate": 0.08333333333333333,
+        "ci95": [
+          0.0287480892712918,
+          0.21827010276918848
+        ]
+      }
+    }
+  },
+  "acceptance": {
+    "external_sklearn": "NOT RUN - no candidate",
+    "external_mdeberta": "NOT RUN - no candidate",
+    "fresh_target_category_improvement": "NOT RUN - no fresh attack cases; no candidate",
+    "fresh_security_benign_mdeberta_fpr_lt_5pct": "baseline only: released mDeBERTa 1.8% (2/110, 95% CI 0.5-6.4%) through the input guard; the CI upper bound exceeds 5%, and no after-model exists, so this is a baseline measurement, not a pass of the round",
+    "existing_targeted_and_old_holdout": "NOT RE-RUN - no candidate; earlier baseline reports unchanged",
+    "tests_lint_format": "PASS - pytest 88 passed, 18 skipped (opt-in adversarial regression tests, not counted as passes); ruff check and ruff format --check pass on app demo tests training/round2"
+  }
+}

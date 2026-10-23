@@ -52,8 +52,9 @@ def fetch_all() -> dict[str, str]:
     for path in LLMAIL_FILES:
         out = LLMAIL_DIR / path
         if not out.exists():
-            hf_hub_download(LLMAIL_REPO, path, repo_type="dataset", revision=LLMAIL_REV,
-                            local_dir=LLMAIL_DIR)
+            hf_hub_download(
+                LLMAIL_REPO, path, repo_type="dataset", revision=LLMAIL_REV, local_dir=LLMAIL_DIR
+            )
         digests[f"llmail/{path}"] = hashlib.sha256(out.read_bytes()).hexdigest()
     for path in AGENTDOJO_FILES:
         out = AGENTDOJO_DIR / path
@@ -68,19 +69,24 @@ def fetch_all() -> dict[str, str]:
 
 # ── LLMail-Inject ────────────────────────────────────────────────────────────
 
+
 def llmail_benign_emails() -> dict[str, list[str]]:
     """Benign emails shipped with the challenge: FP-test emails and scenario emails."""
     fp = json.loads((LLMAIL_DIR / "data/emails_for_fp_tests.json").read_text())
     scenarios = json.loads((LLMAIL_DIR / "data/scenarios.json").read_text())
     scenario_emails = list(dict.fromkeys(e for s in scenarios.values() for e in s["emails"]))
     fp_set = set(fp)
-    return {"fp_tests": list(dict.fromkeys(fp)),
-            "scenario": [e for e in scenario_emails if e not in fp_set]}
+    return {
+        "fp_tests": list(dict.fromkeys(fp)),
+        "scenario": [e for e in scenario_emails if e not in fp_set],
+    }
 
 
 # ── AgentDojo ────────────────────────────────────────────────────────────────
 def _placeholder(names) -> re.Pattern:
-    return re.compile(r"\{(" + "|".join(sorted(map(re.escape, names), key=len, reverse=True)) + r")\}")
+    return re.compile(
+        r"\{(" + "|".join(sorted(map(re.escape, names), key=len, reverse=True)) + r")\}"
+    )
 
 
 def _vector_defaults(suite: str) -> dict[str, str]:
@@ -112,7 +118,10 @@ def agentdojo_records() -> list[dict]:
                     start = i
                     while start > 0 and i - start < 30:
                         cand = lines[start]
-                        if cand.lstrip().startswith("- ") and len(cand) - len(cand.lstrip()) < indent:
+                        if (
+                            cand.lstrip().startswith("- ")
+                            and len(cand) - len(cand.lstrip()) < indent
+                        ):
                             break
                         start -= 1
                     item_indent = len(lines[start]) - len(lines[start].lstrip())
@@ -125,8 +134,15 @@ def agentdojo_records() -> list[dict]:
                         end += 1
                     snippet = "\n".join(lines[start:end])
                     snippet = _dedent(snippet)
-                    records.append({"suite": suite, "file": path.name, "vector": vector,
-                                    "template": snippet, "defaults": defaults})
+                    records.append(
+                        {
+                            "suite": suite,
+                            "file": path.name,
+                            "vector": vector,
+                            "template": snippet,
+                            "defaults": defaults,
+                        }
+                    )
     return records
 
 
