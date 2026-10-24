@@ -28,7 +28,9 @@ os.environ.setdefault("TARGETED_SOURCE_CACHE", str(ARTIFACTS / "sources"))
 
 ORIGINAL_DATASET = ARTIFACTS / "original_combined_dataset.csv"
 ORIGINAL_SHA16 = "0c6e12ed82b86e36"
-REJECTED_DATASET = Path("data/combined_dataset.csv")
+# Rejected candidate pool (commit 70c2e1e); copied out of data/ when the release
+# dataset was restored.
+REJECTED_DATASET = ARTIFACTS / "rejected_combined_dataset.csv"
 REJECTED_SHA16 = "a68869d92a3e6dd1"
 FINAL_EVAL = DATA / "final_eval.csv"
 FINAL_EVAL_MANIFEST = DATA / "final_eval.manifest.json"

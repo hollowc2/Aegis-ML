@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from training.data.prepare_dataset import _eval_keys, _split_group_for, normalise_key, split_groups
+from training.data.prepare_dataset import _eval_keys, normalise_key
+from training.data.prepare_dataset_targeted import _split_group_for, split_groups
 from training.data.targeted_gen import window_rows
 
 

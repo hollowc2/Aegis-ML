@@ -278,11 +278,13 @@ The primary external CSV remained byte-identical (SHA256 prefix
 
 ### Candidate training data and hygiene
 
-The released weights were trained on 16,754 rows; **the current
-`data/combined_dataset.csv` is the rejected candidate's training pool**,
-22,550 rows, SHA256 prefix `a68869d92a3e6dd1`. Do not infer that the bundled
-weights were trained on this newer CSV. The dataset is retained for review,
-not as evidence that the candidate is release-ready.
+The released weights were trained on 16,754 rows (SHA256 prefix
+`0c6e12ed82b86e36`), which is what `data/combined_dataset.csv` holds. The
+rejected candidate's pool, 22,550 rows with SHA256 prefix `a68869d92a3e6dd1`,
+was briefly committed in its place and has since been moved out of `data/`.
+Its recipe is `training/data/prepare_dataset_targeted.py`, which writes only
+to the round-2 artifact root (`~/.cache/aegis-ml-round2`), so the default
+`prepare_dataset` and training commands still rebuild the release recipe.
 
 New training sources: BIPIA train email contexts/train attacks, plus original
 window-sized indirect/exfiltration examples, benign tool/document carriers,
@@ -393,7 +395,9 @@ uv run python -m training.data.targeted_eval
 uv run python -m training.eval_suite --model sklearn --sets targeted --serving-long --name sklearn_targeted_baseline
 # Corresponding names: hf2_targeted_baseline, cascade2_hf2_targeted_baseline,
 # and onnx2_int8_targeted_baseline. Wait for each process to finish.
-uv run python -m training.data.prepare_dataset
+uv run python -m training.data.prepare_dataset_targeted
+# Writes ~/.cache/aegis-ml-round2/rejected_combined_dataset.csv; the trainers
+# read data/combined_dataset.csv, so train on a copy of the repo, never in place.
 uv run python -m training.phase1_sklearn.train --loso
 # Stop if the declared external gate fails; do not retune against its results.
 uv run python -m training.targeted_acceptance

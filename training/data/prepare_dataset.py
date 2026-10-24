@@ -6,7 +6,7 @@ datasets, hand-written seeds, and the local synthetic generator.
 
 Outputs:
   data/combined_dataset.csv  — training pool with a fixed split column
-      Columns: text, label, threat_category, source, split, split_group (+ lineage)
+      Columns: text, label, threat_category, source, split
         - label: 0=benign, 1=malicious
         - threat_category: "none", "prompt_injection", "jailbreak", "data_exfiltration"
         - split: "train" | "val" | "test" — shared by all three training phases
@@ -16,13 +16,14 @@ Outputs:
 Data hygiene, in order:
   1. Normalise (NFKC, strip invisible chars) exactly as the serving path does.
   2. Drop exact and normalised duplicates; drop texts that appear with both labels.
-  3. Remove anything that also appears in the external, holdout, or adversarial
-     evaluation sets, so no evaluation text leaks into training.
+  3. Remove anything that also appears in the external benchmark or any set
+     registered in training.eval_suite.EVAL_SETS, so no evaluation text leaks
+     into training.
   4. Cap each source so no single dataset dominates.
   5. Length-balance: within each log2(length) bucket keep equal benign/malicious
      counts, so text length alone cannot predict the label.
-  6. Split by connected payload/template/carrier families for new rows, and
-     first-eight-word groups for legacy rows; never split by row.
+  6. Split by near-duplicate group (first words of the normalised text) rather
+     than by row, so template families never straddle train and test.
 
 Run:
     python -m training.data.prepare_dataset
@@ -31,7 +32,6 @@ Run:
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import re
 from collections.abc import Callable
@@ -54,7 +54,6 @@ OUTPUT_CSV = DATA_DIR / "combined_dataset.csv"
 EXTERNAL_CSV = DATA_DIR / "external_eval.csv"
 HOLDOUT_CSV = DATA_DIR / "holdout_eval.csv"
 ADVERSARIAL_CSV = DATA_DIR / "adversarial_eval.csv"
-TARGETED_CSV = DATA_DIR / "targeted_eval.csv"
 
 SEED = 42
 MIN_CHARS = 8
@@ -86,7 +85,7 @@ _OVERRIDE_LANGUAGE = re.compile(
 )
 # Benign sources that teach the model attack-like words are not attacks on their
 # own. Length balancing keeps these before sampling other benign rows.
-HARD_NEGATIVE_SOURCES = ("oasst2_corrections", "synthetic_hardneg", "targeted_carrier_benign", "bipia_email_benign")
+HARD_NEGATIVE_SOURCES = ("oasst2_corrections", "synthetic_hardneg")
 
 
 # ── Source specification ──────────────────────────────────────────────────────
@@ -208,58 +207,15 @@ def _split_for(key: str) -> str:
     return "train"
 
 
-def _split_group_for(group: str) -> str:
-    if group.startswith("legacy:"):
-        group = group[len("legacy:"):]
-    bucket = int(hashlib.md5(group.encode()).hexdigest(), 16) % 100
-    return "test" if bucket < TEST_PCT else "val" if bucket < TEST_PCT + VAL_PCT else "train"
-
-
-def split_groups(df: pd.DataFrame) -> list[str]:
-    """Connected components enforce both payload AND template family isolation.
-
-    Duplicate texts merge their lineage before dedup drops rows. Legacy rows
-    retain first-eight-word grouping. New benign carriers share their attack
-    family's component so the same carrier cannot cross splits either.
-    """
-    parent: dict[str, str] = {}
-
-    def find(x):
-        parent.setdefault(x, x)
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
-    def union(a, b):
-        a, b = find(a), find(b)
-        if a != b:
-            parent[max(a, b)] = min(a, b)
-
-    groups = []
-    for row in df.to_dict("records"):
-        key = normalise_key(str(row["text"]))
-        ids = [f"text:{key}"]
-        for field in ("payload", "template_id", "carrier_id"):
-            value = row.get(field)
-            if isinstance(value, str) and value:
-                ids.append(f"{field}:{normalise_key(value)}")
-        if len(ids) == 1:
-            ids.append("legacy:" + " ".join(key.split()[:SPLIT_GROUP_WORDS]))
-        for x in ids[1:]:
-            union(ids[0], x)
-        groups.append(ids[0])
-    # Canonical IDs must not depend on which row was visited first.
-    return [find(g) for g in groups]
-
-
 def load_source(spec: Source) -> pd.DataFrame:
     """Load one HF dataset split and return columns text, label, threat_category, source."""
+    empty = pd.DataFrame(columns=["text", "label", "threat_category", "source"])
     logger.info("Loading %s [%s%s]", spec.name, spec.split, f", {spec.config}" if spec.config else "")
     try:
         raw = load_dataset(spec.name, spec.config, split=spec.split).to_pandas()
     except Exception as exc:
-        raise RuntimeError(f"Required source failed: {spec.name}") from exc
+        logger.warning("  failed to load %s: %s — skipping", spec.name, exc)
+        return empty
 
     if spec.row_filter is not None:
         raw = raw[spec.row_filter(raw)]
@@ -290,7 +246,7 @@ def load_source(spec: Source) -> pd.DataFrame:
 
 def _clean(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    df["text"] = df["text"].astype(str).map(lambda t: _preprocessor.preprocess(t)[0]).str.strip().str.slice(0, MAX_CHARS)
+    df["text"] = df["text"].astype(str).str.strip().str.slice(0, MAX_CHARS)
     df = df[df["text"].str.len() >= MIN_CHARS]
     df["key"] = df["text"].map(normalise_key)
     df = df[df["key"].str.len() > 0]
@@ -333,9 +289,10 @@ def length_balance(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _eval_keys() -> set[str]:
-    keys: set[str] = set()
+    """Normalised texts of every registered evaluation set (training.eval_suite.EVAL_SETS)."""
     from training.eval_suite import EVAL_SETS
 
+    keys: set[str] = set()
     for path, _ in EVAL_SETS.values():
         if path.exists():
             keys.update(pd.read_csv(path)["text"].astype(str).map(normalise_key))
@@ -350,8 +307,7 @@ def build_dataset(n_synthetic: int = 3000) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Return (training pool with split column, external benchmark)."""
     train_frames, external_frames = [], []
     for spec in SOURCES:
-        if not (spec.external and EXTERNAL_CSV.exists()):
-            (external_frames if spec.external else train_frames).append(load_source(spec))
+        (external_frames if spec.external else train_frames).append(load_source(spec))
 
     seed_rows = (
         [{"text": t, "label": 0, "threat_category": "none"} for t in SEED_BENIGN]
@@ -363,58 +319,21 @@ def build_dataset(n_synthetic: int = 3000) -> tuple[pd.DataFrame, pd.DataFrame]:
     train_frames.append(pd.DataFrame(generate_synthetic_examples(n=n_synthetic)).assign(source="synthetic"))
     train_frames.append(pd.DataFrame(generate_hard_negatives()).assign(source="synthetic_hardneg"))
 
-    if EXTERNAL_CSV.exists():
-        external = pd.read_csv(EXTERNAL_CSV)
-        external["key"] = external.text.map(normalise_key)
-    else:
-        external = _clean(pd.concat(external_frames, ignore_index=True))
-    if not TARGETED_CSV.exists():
-        raise FileNotFoundError("Build and baseline targeted_eval before adding training data")
-    for model in ("sklearn", "hf2", "cascade2_hf2", "onnx2_int8"):
-        report = Path(f"reports/{model}_targeted_baseline.json")
-        if not report.exists():
-            raise FileNotFoundError(f"Missing blind baseline: {report}")
-        baseline = json.loads(report.read_text())
-        digest = hashlib.sha256(TARGETED_CSV.read_bytes()).hexdigest()
-        if baseline["sets"]["targeted"]["sha256"] != digest:
-            raise ValueError("Baseline does not match the frozen evaluation set")
-    from transformers import AutoTokenizer
-    from training.data.targeted_gen import generate_targeted_examples, window_rows
-    from training.data.targeted_sources import training_rows
-
-    tokenizer = AutoTokenizer.from_pretrained("models/hf2_classifier", local_files_only=True)
-    train_frames.append(pd.DataFrame(generate_targeted_examples(tokenizer)))
-    bipia = []
-    for row in training_rows():
-        bipia.extend(window_rows(row["text"], row.get("payload", ""), group="bipia:train",
-                                 source=row["source"], category=row["threat_category"], tokenizer=tokenizer))
-    train_frames.append(pd.DataFrame(bipia))
-    raw_pool = pd.concat(train_frames, ignore_index=True)
-    raw_pool["split_group"] = split_groups(raw_pool)
-    pool = _clean(raw_pool)
+    external = _clean(pd.concat(external_frames, ignore_index=True))
+    pool = _clean(pd.concat(train_frames, ignore_index=True))
 
     # Nothing that is evaluated on may appear in training.
     forbidden = _eval_keys() | set(external["key"])
-    manifest = json.loads(TARGETED_CSV.with_suffix(".manifest.json").read_text())
-    reserved_payloads = {normalise_key(p) for p in manifest["reserved_payloads"]}
-    from app.guardrails.input_guard import _extract_segments
-    from app.models.schemas import ChatCompletionRequest, ChatMessage
-    for text in pd.read_csv(TARGETED_CSV).text:
-        req = ChatCompletionRequest(model="overlap-check", messages=[ChatMessage(role="user", content=text)])
-        forbidden.update(normalise_key(w) for w in _extract_segments(req))
-    leaked = pool["key"].isin(forbidden) | pool["key"].map(
-        lambda key: any(payload in key for payload in reserved_payloads if payload))
+    leaked = pool["key"].isin(forbidden)
     logger.info("Removing %d training rows that overlap evaluation sets", int(leaked.sum()))
     pool = pool[~leaked]
 
     caps = {s.source: s.cap for s in SOURCES if s.cap and not s.external}
-    caps.update(targeted_indirect=1800, targeted_exfil=1800, targeted_carrier_benign=2200,
-                synthetic_hardneg=2200, bipia_email_train=900, bipia_email_benign=300)
     pool = _cap_sources(pool, caps)
     logger.info("Length-balancing %d rows...", len(pool))
     pool = length_balance(pool)
 
-    pool["split"] = pool["split_group"].map(_split_group_for)
+    pool["split"] = pool["key"].map(_split_for)
     pool = pool.drop(columns="key").sample(frac=1, random_state=SEED).reset_index(drop=True)
     external = external[["text", "label", "source"]].reset_index(drop=True)
     return pool, external
@@ -427,25 +346,13 @@ def main() -> None:
         holdout_main()
 
     df, external = build_dataset()
-    df.to_csv(OUTPUT_CSV, index=False)
-    # The existing primary benchmark is immutable during a targeted experiment.
+    # The primary benchmark is frozen once written: refuse silent upstream changes.
     if EXTERNAL_CSV.exists():
-        previous = pd.read_csv(EXTERNAL_CSV)
-        if not previous.equals(external):
-            raise ValueError("External benchmark changed upstream; refusing to overwrite it")
-    else:
+        if external.to_csv(index=False) != EXTERNAL_CSV.read_text():
+            raise ValueError(f"{EXTERNAL_CSV} would change; refusing to overwrite it")
+    df.to_csv(OUTPUT_CSV, index=False)
+    if not EXTERNAL_CSV.exists():
         external.to_csv(EXTERNAL_CSV, index=False)
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.metrics import roc_auc_score
-    train = df[df.split == "train"]
-    test = df[df.split == "test"]
-    length_clf = LogisticRegression().fit(np.log1p(train.text.str.len()).to_numpy().reshape(-1, 1), train.label)
-    length_auc = roc_auc_score(test.label, length_clf.predict_proba(np.log1p(test.text.str.len()).to_numpy().reshape(-1, 1))[:, 1])
-    summary = {"rows": len(df), "sha256_16": hashlib.sha256(OUTPUT_CSV.read_bytes()).hexdigest()[:16],
-               "per_source": df.source.value_counts().to_dict(), "length_only_test_auc": length_auc,
-               "splits": df.groupby(["split", "label"]).size().unstack().to_dict()}
-    Path("reports/dataset_targeted.json").write_text(json.dumps(summary, indent=2))
-    logger.info("Dataset sha256=%s, length-only test AUC=%.4f", summary["sha256_16"], length_auc)
     logger.info("Saved %d training rows to %s", len(df), OUTPUT_CSV)
     logger.info("Saved %d external benchmark rows to %s", len(external), EXTERNAL_CSV)
 

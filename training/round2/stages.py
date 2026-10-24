@@ -2,9 +2,11 @@
 
 ``build("original")`` replays the recipe of ``70c2e1e^`` (16,754 rows) and
 ``build("rejected")`` the recipe of ``70c2e1e`` (22,550 rows). Each returns
-the frame after every hygiene/sampling step so the diagnosis can compare them;
-the final frames are checked against the recorded SHA256 prefixes, so stage
-statistics come from a verified reproduction rather than a reimplementation.
+the frame after every hygiene/sampling step so the diagnosis can compare them.
+Neither replay is byte-exact (about 75% of final rows match the committed
+CSVs, from upstream sampling drift), so stage statistics are indicative; exact
+comparisons use the committed CSVs. The rejected recipe lives in
+``training/data/prepare_dataset_targeted.py``.
 """
 
 from __future__ import annotations
@@ -75,12 +77,13 @@ def load_raw_sources() -> list[pd.DataFrame]:
 
 def build(recipe: str, raw_sources: list[pd.DataFrame] | None = None) -> dict:
     """Return {"stages": {name: frame}, "length_log": [...], "final": frame}."""
-    from training.data import prepare_dataset as pdx
+    from training.data import prepare_dataset, prepare_dataset_targeted
     from training.data.seeds import SEED_BENIGN, SEED_MALICIOUS
-    from training.data.synthetic_gen import generate_hard_negatives, generate_synthetic_examples
+    from training.data.synthetic_gen import generate_synthetic_examples
 
     if recipe not in {"original", "rejected"}:
         raise ValueError(recipe)
+    pdx = prepare_dataset if recipe == "original" else prepare_dataset_targeted
     frames = [f.copy() for f in (raw_sources if raw_sources is not None else load_raw_sources())]
     seed_rows = [{"text": t, "label": 0, "threat_category": "none"} for t in SEED_BENIGN] + [
         {"text": t, "label": 1, "threat_category": pdx.assign_threat_category(t, 1)}
@@ -91,7 +94,9 @@ def build(recipe: str, raw_sources: list[pd.DataFrame] | None = None) -> dict:
     if recipe == "original":
         frames.append(pd.DataFrame(_original_hard_negatives()).assign(source="synthetic_hardneg"))
     else:
-        frames.append(pd.DataFrame(generate_hard_negatives()).assign(source="synthetic_hardneg"))
+        frames.append(
+            pd.DataFrame(pdx.generate_hard_negatives()).assign(source="synthetic_hardneg")
+        )
 
     external = pd.read_csv(pdx.EXTERNAL_CSV)
     external["key"] = external.text.map(pdx.normalise_key)
