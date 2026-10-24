@@ -8,8 +8,11 @@ Evaluation sets:
   test         — in-distribution split of data/combined_dataset.csv (split == "test")
   external     — third-party test splits never trained on (data/external_eval.csv)
   holdout      — hand-written attacks + hard negatives (data/holdout_eval.csv)
+  targeted     — frozen public test sources + independently authored cases
   adversarial  — generator-derived regression suite (data/adversarial_eval.csv);
                  shares vocabulary with synthetic_gen.py, so treat as optimistic
+  round2_fp    — frozen round-2 benign-only set (data/round2/final_fp_eval.csv);
+                 false-positive evidence only, scored per model once before training
 
 Texts are passed through the serving-path TextPreprocessor before scoring, so
 the numbers match what the API sees with ENABLE_TEXT_PREPROCESSING=true.
@@ -49,7 +52,10 @@ EVAL_SETS: dict[str, tuple[Path, str]] = {
     # name: (path, column to break results down by)
     "external": (Path("data/external_eval.csv"), "source"),
     "holdout": (Path("data/holdout_eval.csv"), "category"),
+    "targeted": (Path("data/targeted_eval.csv"), "category"),
     "adversarial": (Path("data/adversarial_eval.csv"), "category"),
+    # Round-2 frozen false-positive set (all benign); see training/round2/final_fp_eval.py.
+    "round2_fp": (Path("data/round2/final_fp_eval.csv"), "category"),
 }
 REPORTS_DIR = Path("reports")
 
@@ -125,6 +131,7 @@ def run_suite(
     name: str,
     extra: dict | None = None,
     write: bool = True,
+    sets: Sequence[str] | None = None,
 ) -> dict:
     """Score every evaluation set, print a summary, and write reports/<name>.json."""
     report: dict = {
@@ -143,6 +150,8 @@ def run_suite(
             logger.warning("Evaluation set %s missing (%s) — skipped", set_name, path)
 
     for set_name, (df, by) in frames.items():
+        if sets is not None and set_name not in sets:
+            continue
         texts = preprocess(df["text"].astype(str).tolist())
         start = time.perf_counter()
         df = df.assign(p=np.asarray(score_fn(texts), dtype=float))
@@ -150,6 +159,12 @@ def run_suite(
         metrics = binary_metrics(df["label"].to_numpy(), df["p"].to_numpy(), threshold)
         metrics["ms_per_example_batched"] = elapsed / len(df) * 1000
         metrics["breakdown"] = _breakdown(df, by, threshold)
+        path = DATASET_CSV if set_name == "test" else EVAL_SETS[set_name][0]
+        metrics["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+        if set_name == "targeted":
+            metrics["by_source"] = _breakdown(df, "source", threshold)
+        if set_name == "holdout":
+            metrics["caveat"] = "Already-seen diagnostic set; not blind evidence."
         report["sets"][set_name] = metrics
 
     _print_report(report)
@@ -214,7 +229,7 @@ def load_classifier(classifier_type: str):
     return clf
 
 
-def classifier_score_fn(classifier_type_or_clf, concurrency: int = 8) -> ScoreFn:
+def classifier_score_fn(classifier_type_or_clf, concurrency: int = 1) -> ScoreFn:
     """Score texts with a serving classifier (given by type name or instance)."""
     clf = (load_classifier(classifier_type_or_clf)
            if isinstance(classifier_type_or_clf, str) else classifier_type_or_clf)
@@ -229,6 +244,55 @@ def classifier_score_fn(classifier_type_or_clf, concurrency: int = 8) -> ScoreFn
         return await asyncio.gather(*(one(t) for t in texts))
 
     return lambda texts: np.asarray(asyncio.run(_score(list(texts))))
+
+
+def serving_long_metrics(clf, threshold: float) -> dict:
+    """Use raw requests through the actual guard, with one prediction at a time.
+
+    Records fail-secure errors separately; they are not detector successes.
+    """
+    from unittest.mock import patch
+    from app.config import Settings
+    from app.guardrails.input_guard import run_input_guardrail
+    from app.models.schemas import ChatCompletionRequest, ChatMessage
+
+    path = EVAL_SETS["targeted"][0]
+    df = pd.read_csv(path)
+    df = df[df.category.isin(["buried_attack", "long_benign"])].copy()
+    settings = Settings(confidence_threshold=threshold)
+
+    async def score():
+        sem = asyncio.Semaphore(1)
+
+        class SerialClassifier:
+            def __getattr__(self, name):
+                return getattr(clf, name)
+
+            async def predict(self, text):
+                async with sem:
+                    return await clf.predict(text)
+
+        wrapper = SerialClassifier()
+        results = []
+        with patch("app.guardrails.input_guard.get_settings", return_value=settings):
+            for text in df.text:
+                request = ChatCompletionRequest(model="evaluation", messages=[ChatMessage(role="user", content=text)])
+                results.append(await run_input_guardrail(request, wrapper))
+        return results
+
+    results = asyncio.run(score())
+    df["p"] = [r.confidence for r in results]
+    metrics = binary_metrics(df.label.to_numpy(), df.p.to_numpy(), threshold)
+    metrics["breakdown"] = _breakdown(df, "category", threshold)
+    metrics["classifier_errors"] = sum("Classifier error" in r.reason for r in results)
+    if metrics["classifier_errors"]:
+        raise RuntimeError("Serving evaluation encountered classifier errors; results are invalid")
+    metrics["size_limit_blocks"] = sum("too large to scan" in r.reason for r in results)
+    metrics["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    metrics["path"] = "app.guardrails.input_guard.run_input_guardrail"
+    metrics["settings"] = {"max_scan_segments": settings.max_scan_segments,
+                           "invisible_char_bias": settings.preprocess_invisible_char_bias}
+    return metrics
 
 
 def _default_threshold(classifier_type: str) -> float | None:
@@ -259,13 +323,19 @@ def main() -> None:
     parser.add_argument("--threshold", type=float, default=None,
                         help="Defaults to the value tuned at training time (as the API does)")
     parser.add_argument("--name", default=None, help="Report name (default: --model)")
+    parser.add_argument("--sets", nargs="+", choices=["test", *EVAL_SETS], default=None)
+    parser.add_argument("--serving-long", action="store_true",
+                        help="Also score targeted long cases through the real input guard")
     args = parser.parse_args()
 
     from app.classifiers import resolve_threshold
 
     clf = load_classifier(args.model)
     threshold = resolve_threshold(args.threshold, clf)
-    run_suite(classifier_score_fn(clf), threshold, name=args.name or args.model)
+    report = run_suite(classifier_score_fn(clf), threshold, name=args.name or args.model, sets=args.sets)
+    if args.serving_long:
+        report["serving_long"] = serving_long_metrics(clf, threshold)
+        (REPORTS_DIR / f"{args.name or args.model}.json").write_text(json.dumps(report, indent=2))
 
 
 if __name__ == "__main__":

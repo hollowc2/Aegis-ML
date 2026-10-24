@@ -585,6 +585,14 @@ def build_ui(available_classifiers: list[str] | None = None) -> gr.Blocks:
             [5] Return cleaned response to client
             ```
 
+            **Evaluation update:** The targeted sklearn retraining candidate was rejected
+            (external false-positive rate 2.91%, above the 2% limit). The baseline
+            weights are retained. Indirect injection, exfiltration, long-text attacks,
+            and benign security discussions remain challenging cases.
+            A fresh benign-only check (467 requests) measured 0.9% false positives
+            for mDeBERTa and 2.6% for sklearn; detection of indirect, exfiltration
+            and buried attacks was not re-measured.
+
             **Key security properties:**
             - **Fail-secure**: Any classifier error → block the request
             - **Canary tokens**: Detect successful injections in the output

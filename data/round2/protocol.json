@@ -1,0 +1,32 @@
+{
+  "recorded": "2026-10-23, before training B0 and before scoring any round-2 model on train/val",
+  "evidence_boundary": "Development uses only train and val splits. External, test, holdout, targeted and round2_fp are never used for selection.",
+  "matrix": {
+    "B0": "controlled base pool: original dataset minus all evaluation overlap (exact text, serving windows, reserved payloads); original splits preserved",
+    "B1": "NOT RUN - authoring benign security/correction/authorized-sharing hard negatives was stopped by a safety classifier; work narrowed by the user",
+    "B2": "NOT RUN - indirect/exfiltration additions: attack-side assembly stopped by a safety classifier",
+    "B3": "NOT RUN - depends on B1 and B2",
+    "context_aware_variant": "NOT RUN - matched authorization/provenance scenarios require attack-side content"
+  },
+  "hyperparameter_grid": {
+    "C": [
+      4.0,
+      16.0
+    ],
+    "char_max_features": [
+      100000,
+      300000
+    ]
+  },
+  "model_selection": "best val ROC-AUC within the fixed grid",
+  "threshold_rule": "lowest threshold with val FPR <= 2% (pick_threshold_strict: no 0.95 cap; achieved FPR recorded)",
+  "gates": {
+    "global_val_fpr": "<= 0.02",
+    "security_benign_val_fpr": "< 0.05",
+    "security_benign_slice": "rows annotated by provenance as security discussion, quoted-attack discussion, authorized sharing or corrections",
+    "minimum_slice_support": 50
+  },
+  "selection_rule": "Among arms passing both gates, maximise val recall on target-category slices (indirect_injection + exfiltration); tie (<0.5 pp) broken by lower security-benign val FPR, then by fewer added rows. If no arm passes, stop before GPU training.",
+  "gpu_training_rule": "Train mDeBERTa once only if the selected arm passes both gates and differs from the released recipe. With only B0 available, the security-benign gate has 24 annotated val rows (< 50), so it is not evaluable and GPU training is not warranted.",
+  "acceptance_unchanged": "External: recall loss <= 1 pp vs released baseline and FPR <= 2%; fresh security-topic benign mDeBERTa FPR < 5%; fresh target-category improvements (not measurable this round)."
+}

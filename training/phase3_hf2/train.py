@@ -304,8 +304,7 @@ def train(
     MODELS_DIR.mkdir(exist_ok=True)
 
     # Cap PyTorch intra-op threads to leave CPU headroom for the OS.
-    n_cpu = os.cpu_count() or 4
-    torch_threads = max(2, n_cpu - 2)
+    torch_threads = min(4, len(os.sched_getaffinity(0)))
     torch.set_num_threads(torch_threads)
     torch.set_num_interop_threads(max(1, torch_threads // 2))
 

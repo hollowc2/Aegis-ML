@@ -156,6 +156,22 @@ out-of-distribution attacks (indirect injection, exfiltration, attacks buried
 in long text) remain much harder — full methodology, per-category results and
 caveats are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
+The targeted retraining experiment was rejected: sklearn external FPR rose
+from 1.85% to 2.91% (limit 2%), so the bundled baseline was restored and
+transformer retraining was halted. On the frozen targeted set, indirect recall
+rose from 1.8% to 14.0% and exfiltration from 2.0% to 21.1%, but buried recall
+stayed at 0% and security-topic FPR worsened from 17% to 23%. The table above
+continues to describe the retained baseline models. See the
+[failed experiment, before/after results and licences](docs/BENCHMARKS.md#targeted-experiment-rejected-2026-10-22).
+
+A second round (2026-10-23) trained no new model. It diagnosed the failure on
+train/val data only: the new attack rows carried lexical shortcuts, and the
+candidate's own validation split hid weak slices. It also added a frozen,
+benign-only false-positive set of 467 rows. On that set, the released
+mDeBERTa flags 0.9% of benign requests overall and 1.8% of security-topic
+requests. sklearn flags 2.6% and 2.7%. Attack-side work was not run. See
+[round 2](docs/BENCHMARKS.md#round-2-narrowed-diagnosis-and-fresh-false-positive-set-2026-10-23).
+
 ## Quick start
 
 ### Requirements

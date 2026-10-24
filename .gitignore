@@ -70,3 +70,6 @@ htmlcov/
 
 # HuggingFace cache
 .cache/
+
+# Round 2: base pool is byte-identical to 70c2e1e^:data/combined_dataset.csv
+data/round2/base_pool.csv

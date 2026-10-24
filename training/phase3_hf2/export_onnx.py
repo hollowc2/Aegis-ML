@@ -197,6 +197,8 @@ def validate_accuracy_delta(
 
     tokenizer = AutoTokenizer.from_pretrained(str(output_dir))
     sess_opts = ort.SessionOptions()
+    sess_opts.intra_op_num_threads = 4
+    sess_opts.inter_op_num_threads = 1
     sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
     def make_session(path):
@@ -204,8 +206,6 @@ def validate_accuracy_delta(
             str(path), sess_options=sess_opts, providers=["CPUExecutionProvider"]
         )
 
-    fp32_sess = make_session(fp32_path)
-    int8_sess = make_session(int8_path)
 
     df = pd.read_csv(Path("data/combined_dataset.csv")).dropna(subset=["text", "label"])
     test = df[df["split"] == "test"]
@@ -213,21 +213,23 @@ def validate_accuracy_delta(
     X_sample = X_test[:n_samples]
     y_sample = y_test[:n_samples]
 
-    input_names_fp32 = {i.name for i in fp32_sess.get_inputs()}
-    input_names_int8 = {i.name for i in int8_sess.get_inputs()}
+    def score_graph(path):
+        # Release the session before loading the next graph; no parallel ORT sessions.
+        import gc
+        session = make_session(path)
+        names = {i.name for i in session.get_inputs()}
+        predictions, scores = [], []
+        for text in X_sample:
+            inputs = tokenizer(text, return_tensors="np", truncation=True, max_length=512, padding=True)
+            logits = session.run(["binary_logits"], {k: v for k, v in inputs.items() if k in names})[0][0]
+            predictions.append(int(np.argmax(logits)))
+            scores.append(float(softmax(logits)[1]))
+        del session
+        gc.collect()
+        return predictions, scores
 
-    fp32_preds, int8_preds = [], []
-    fp32_scores, int8_scores = [], []
-    for text in X_sample:
-        inputs = tokenizer(text, return_tensors="np", truncation=True, max_length=512, padding=True)
-        feed_fp32 = {k: v for k, v in inputs.items() if k in input_names_fp32}
-        feed_int8 = {k: v for k, v in inputs.items() if k in input_names_int8}
-        fp32_logits = fp32_sess.run(["binary_logits"], feed_fp32)[0][0]
-        int8_logits = int8_sess.run(["binary_logits"], feed_int8)[0][0]
-        fp32_preds.append(int(np.argmax(softmax(fp32_logits))))
-        int8_preds.append(int(np.argmax(softmax(int8_logits))))
-        fp32_scores.append(float(softmax(fp32_logits)[1]))
-        int8_scores.append(float(softmax(int8_logits)[1]))
+    fp32_preds, fp32_scores = score_graph(fp32_path)
+    int8_preds, int8_scores = score_graph(int8_path)
 
     fp32_acc = sum(p == y for p, y in zip(fp32_preds, y_sample)) / len(y_sample)
     int8_acc = sum(p == y for p, y in zip(int8_preds, y_sample)) / len(y_sample)

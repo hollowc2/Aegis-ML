@@ -16,8 +16,9 @@ Outputs:
 Data hygiene, in order:
   1. Normalise (NFKC, strip invisible chars) exactly as the serving path does.
   2. Drop exact and normalised duplicates; drop texts that appear with both labels.
-  3. Remove anything that also appears in the external, holdout, or adversarial
-     evaluation sets, so no evaluation text leaks into training.
+  3. Remove anything that also appears in the external benchmark or any set
+     registered in training.eval_suite.EVAL_SETS, so no evaluation text leaks
+     into training.
   4. Cap each source so no single dataset dominates.
   5. Length-balance: within each log2(length) bucket keep equal benign/malicious
      counts, so text length alone cannot predict the label.
@@ -288,8 +289,11 @@ def length_balance(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _eval_keys() -> set[str]:
+    """Normalised texts of every registered evaluation set (training.eval_suite.EVAL_SETS)."""
+    from training.eval_suite import EVAL_SETS
+
     keys: set[str] = set()
-    for path in (HOLDOUT_CSV, ADVERSARIAL_CSV):
+    for path, _ in EVAL_SETS.values():
         if path.exists():
             keys.update(pd.read_csv(path)["text"].astype(str).map(normalise_key))
         else:
@@ -342,8 +346,13 @@ def main() -> None:
         holdout_main()
 
     df, external = build_dataset()
+    # The primary benchmark is frozen once written: refuse silent upstream changes.
+    if EXTERNAL_CSV.exists():
+        if external.to_csv(index=False) != EXTERNAL_CSV.read_text():
+            raise ValueError(f"{EXTERNAL_CSV} would change; refusing to overwrite it")
     df.to_csv(OUTPUT_CSV, index=False)
-    external.to_csv(EXTERNAL_CSV, index=False)
+    if not EXTERNAL_CSV.exists():
+        external.to_csv(EXTERNAL_CSV, index=False)
     logger.info("Saved %d training rows to %s", len(df), OUTPUT_CSV)
     logger.info("Saved %d external benchmark rows to %s", len(external), EXTERNAL_CSV)
 

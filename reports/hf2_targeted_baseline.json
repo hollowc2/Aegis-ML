@@ -1,0 +1,108 @@
+{
+  "model": "hf2_targeted_baseline",
+  "threshold": 0.8020753131637574,
+  "dataset": {
+    "path": "data/combined_dataset.csv",
+    "sha256_16": "0c6e12ed82b86e36",
+    "rows": 16754
+  },
+  "sets": {
+    "targeted": {
+      "n": 2118,
+      "n_malicious": 1579,
+      "n_benign": 539,
+      "recall": 0.09436352121595946,
+      "fpr": 0.2189239332096475,
+      "precision": 0.5580524344569289,
+      "f1": 0.16143011917659805,
+      "roc_auc": 0.47515512624532796,
+      "ms_per_example_batched": 22.185311967893814,
+      "breakdown": {
+        "buried_attack": {
+          "n": 100,
+          "recall": 0.0
+        },
+        "data_exfiltration": {
+          "n": 644,
+          "recall": 0.08229813664596274
+        },
+        "indirect_injection": {
+          "n": 835,
+          "recall": 0.11497005988023952
+        },
+        "long_benign": {
+          "n": 100,
+          "fpr": 0.0
+        },
+        "notinject_benign": {
+          "n": 339,
+          "fpr": 0.2831858407079646
+        },
+        "security_benign": {
+          "n": 100,
+          "fpr": 0.22
+        }
+      },
+      "sha256": "e049ed098724e00357b2de19c8b465d6d7ab78a5e834965170c3009d1535c804",
+      "by_source": {
+        "authored_targeted_v1": {
+          "n": 500,
+          "recall": 0.16,
+          "fpr": 0.11
+        },
+        "bipia_email_test": {
+          "n": 225,
+          "recall": 0.02666666666666667
+        },
+        "injecagent_dh_test": {
+          "n": 510,
+          "recall": 0.10392156862745099
+        },
+        "injecagent_ds_test": {
+          "n": 544,
+          "recall": 0.07720588235294118
+        },
+        "notinject_one": {
+          "n": 113,
+          "fpr": 0.13274336283185842
+        },
+        "notinject_three": {
+          "n": 113,
+          "fpr": 0.49557522123893805
+        },
+        "notinject_two": {
+          "n": 113,
+          "fpr": 0.22123893805309736
+        }
+      }
+    }
+  },
+  "serving_long": {
+    "n": 200,
+    "n_malicious": 100,
+    "n_benign": 100,
+    "recall": 0.0,
+    "fpr": 0.0,
+    "precision": 0.0,
+    "f1": 0.0,
+    "roc_auc": 0.5668500000000001,
+    "breakdown": {
+      "buried_attack": {
+        "n": 100,
+        "recall": 0.0
+      },
+      "long_benign": {
+        "n": 100,
+        "fpr": 0.0
+      }
+    },
+    "classifier_errors": 0,
+    "size_limit_blocks": 0,
+    "sha256": "e049ed098724e00357b2de19c8b465d6d7ab78a5e834965170c3009d1535c804",
+    "path": "app.guardrails.input_guard.run_input_guardrail",
+    "settings": {
+      "max_scan_segments": 64,
+      "invisible_char_bias": 0.15
+    }
+  }
+}
