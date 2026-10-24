@@ -124,3 +124,25 @@ def test_fp_scoring_separates_size_limit_blocks_from_false_positives(tmp_path, m
     assert out["size_limit_rows"] == {"n": 1, "size_limit_blocks": 1}
     assert out["input_guard"]["fpr_all"]["n"] == 1
     assert out["input_guard"]["fpr_all"]["k"] == 0
+
+
+def test_long_doc_composition_keeps_each_buried_attack_whole():
+    from training.round2 import long_docs
+
+    val = pd.DataFrame(
+        {
+            "text": [f"Benign paragraph number {i} about lunch." for i in range(50)]
+            + ["Short attack row A.", "Short attack row B.", "x" * 900],
+            "label": [0] * 50 + [1, 1, 1],
+        }
+    )
+    docs = long_docs.compose(val, seed=1)
+    for length in long_docs.LENGTHS:
+        g = docs[docs.length == length]
+        assert (g.label == 0).sum() == long_docs.BENIGN_PER_LENGTH
+        # The paragraph counter includes one trailing separator: up to 2 chars short.
+        assert (g.text.str.len() >= length - 2).all()
+    buried = docs[docs.label == 1].text
+    # The over-long attack row is never used; one eligible row appears per document.
+    assert not buried.str.contains("x" * 900).any()
+    assert (buried.str.count("Short attack row") == 1).all()

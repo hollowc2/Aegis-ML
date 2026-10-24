@@ -1,0 +1,216 @@
+{
+  "model": "hf2",
+  "evidence_boundary": "val split of the released dataset only",
+  "source_dataset_sha16": "0c6e12ed82b86e36",
+  "composition": {
+    "lengths": [
+      2500,
+      5000,
+      10000,
+      20000,
+      40000
+    ],
+    "benign_per_length": 200,
+    "buried_per_length": 100,
+    "seed": 20261023,
+    "val_benign_rows": 784,
+    "val_attack_rows_eligible": 695
+  },
+  "threshold": 0.8020753131637574,
+  "short_val_benign_fpr": {
+    "k": 17,
+    "n": 784,
+    "rate": 0.021683673469387755,
+    "ci95": [
+      0.013581485929558323,
+      0.034450504257301576
+    ]
+  },
+  "long_benign_fpr": {
+    "k": 130,
+    "n": 1000,
+    "rate": 0.13,
+    "ci95": [
+      0.11056344299877965,
+      0.1522684619551494
+    ]
+  },
+  "buried_recall": {
+    "k": 119,
+    "n": 500,
+    "rate": 0.238,
+    "ci95": [
+      0.20275841101838787,
+      0.2772368890918055
+    ]
+  },
+  "by_length": {
+    "2500": {
+      "windows_median": 2.0,
+      "benign_fpr": {
+        "k": 8,
+        "n": 200,
+        "rate": 0.04,
+        "ci95": [
+          0.02040538715065641,
+          0.07693293829419882
+        ]
+      },
+      "buried_recall": {
+        "k": 19,
+        "n": 100,
+        "rate": 0.19,
+        "ci95": [
+          0.1251465399270426,
+          0.27779024070807856
+        ]
+      }
+    },
+    "5000": {
+      "windows_median": 4.0,
+      "benign_fpr": {
+        "k": 11,
+        "n": 200,
+        "rate": 0.055,
+        "ci95": [
+          0.030985020801370097,
+          0.0957879244659355
+        ]
+      },
+      "buried_recall": {
+        "k": 25,
+        "n": 100,
+        "rate": 0.25,
+        "ci95": [
+          0.1754509400372426,
+          0.3430464637007583
+        ]
+      }
+    },
+    "10000": {
+      "windows_median": 7.0,
+      "benign_fpr": {
+        "k": 20,
+        "n": 200,
+        "rate": 0.1,
+        "ci95": [
+          0.06566994117157123,
+          0.14940686356308552
+        ]
+      },
+      "buried_recall": {
+        "k": 16,
+        "n": 100,
+        "rate": 0.16,
+        "ci95": [
+          0.10095202349473717,
+          0.24420444558894414
+        ]
+      }
+    },
+    "20000": {
+      "windows_median": 13.0,
+      "benign_fpr": {
+        "k": 29,
+        "n": 200,
+        "rate": 0.145,
+        "ci95": [
+          0.1028928513530641,
+          0.20048781284894374
+        ]
+      },
+      "buried_recall": {
+        "k": 25,
+        "n": 100,
+        "rate": 0.25,
+        "ci95": [
+          0.1754509400372426,
+          0.3430464637007583
+        ]
+      }
+    },
+    "40000": {
+      "windows_median": 26.0,
+      "benign_fpr": {
+        "k": 62,
+        "n": 200,
+        "rate": 0.31,
+        "ci95": [
+          0.24998842733633997,
+          0.377173054912622
+        ]
+      },
+      "buried_recall": {
+        "k": 34,
+        "n": 100,
+        "rate": 0.34,
+        "ci95": [
+          0.25461379497543,
+          0.43722454341689065
+        ]
+      }
+    }
+  },
+  "sweep_descriptive_only": [
+    {
+      "threshold": 0.8020753131637574,
+      "short_val_benign_fpr": 0.021683673469387755,
+      "long_benign_fpr": 0.13,
+      "buried_recall": 0.238
+    },
+    {
+      "threshold": 0.8021,
+      "short_val_benign_fpr": 0.021683673469387755,
+      "long_benign_fpr": 0.13,
+      "buried_recall": 0.238
+    },
+    {
+      "threshold": 0.8256,
+      "short_val_benign_fpr": 0.021683673469387755,
+      "long_benign_fpr": 0.129,
+      "buried_recall": 0.224
+    },
+    {
+      "threshold": 0.8491,
+      "short_val_benign_fpr": 0.01913265306122449,
+      "long_benign_fpr": 0.125,
+      "buried_recall": 0.214
+    },
+    {
+      "threshold": 0.8725,
+      "short_val_benign_fpr": 0.017857142857142856,
+      "long_benign_fpr": 0.122,
+      "buried_recall": 0.208
+    },
+    {
+      "threshold": 0.896,
+      "short_val_benign_fpr": 0.012755102040816327,
+      "long_benign_fpr": 0.119,
+      "buried_recall": 0.19
+    },
+    {
+      "threshold": 0.9195,
+      "short_val_benign_fpr": 0.011479591836734694,
+      "long_benign_fpr": 0.115,
+      "buried_recall": 0.156
+    },
+    {
+      "threshold": 0.943,
+      "short_val_benign_fpr": 0.007653061224489796,
+      "long_benign_fpr": 0.105,
+      "buried_recall": 0.134
+    },
+    {
+      "threshold": 0.9665,
+      "short_val_benign_fpr": 0.00510204081632653,
+      "long_benign_fpr": 0.072,
+      "buried_recall": 0.088
+    },
+    {
+      "threshold": 0.99,
+      "short_val_benign_fpr": 0.0,
+      "long_benign_fpr": 0.0,
+      "buried_recall": 0.004
+    }
+  ]
+}

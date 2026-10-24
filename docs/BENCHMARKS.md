@@ -497,6 +497,38 @@ interval's upper bound (6.4%) still exceeds 5%, and these are baseline
 measurements, not a round-2 improvement. Per-model reports:
 `reports/round2/*_fp_baseline.json`.
 
+### Long documents: windowing multiplies false alarms (val only)
+
+The guard blocks a message when any 2,000-character window reaches the
+threshold, so each extra window is another chance of a false alarm. To size
+this without touching evaluation sets, `training/round2/long_docs.py` builds
+documents from the released dataset's `val` split: 1,000 benign documents
+(200 each at about 2.5k, 5k, 10k, 20k and 40k characters) made by joining
+`val` benign rows, and 500 buried-attack documents, which are the same kind of
+document with one `val` attack row of at most 400 characters inserted at a
+paragraph boundary (so a window always holds it whole). No attack text was
+written; every document goes through the real input guard.
+
+| Model, window | Short `val` benign FPR | Long benign FPR | Buried-attack recall | Doc AUC |
+|---|---:|---:|---:|---:|
+| sklearn, 2,000 (served) | 1.9% | 11.7% (28% at 40k) | 15.0% | 0.55 |
+| sklearn, 1,000 | 3.1% | 30.8% | 40.2% | 0.58 |
+| sklearn, 600 | 3.6% | 43.2% | 62.6% | 0.61 |
+| mDeBERTa, 2,000 (served) | 2.2% | 13.0% (31% at 40k) | 23.8% | not recorded |
+
+Standalone, sklearn catches 94.7% of the same 695 attack rows. Inside a
+window of unrelated benign text it barely separates buried-attack documents
+from benign ones (AUC 0.55), so the threshold sweeps in the reports cut false
+alarms and detections together. Smaller windows raise both rates and exceed
+`MAX_SCAN_SEGMENTS=64` on long inputs (202 windows at 40k characters for 600).
+**No serving change was made:** neither a threshold for multi-window messages
+nor a smaller window improves the trade-off. Fixing it needs training data in
+which short attacks and benign text share a window (the missing attack data).
+
+Caveats: joined `val` rows are less coherent than real documents, and the
+fresh set's real long documents gave lower rates (sklearn 3/36, mDeBERTa 1/36,
+too few to compare). Reports: `reports/round2/long_docs_*.json`.
+
 ### Acceptance disposition
 
 - **NOT RUN:** external sklearn/mDeBERTa (no candidate), fresh target-category
@@ -519,4 +551,6 @@ taskset -c 0-3 uv run python -m training.round2.final_fp_eval     # refuses to o
 taskset -c 0-3 uv run python -m training.round2.score_final --model sklearn --name sklearn_fp_baseline
 # hf2, cascade2_hf2, and onnx2 with ONNX2_USE_INT8=true, one at a time
 taskset -c 0-3 uv run python -m training.round2.base_pool
+taskset -c 0-3 uv run python -m training.round2.long_docs --model sklearn --name sklearn
+# --segment-chars 1000|600 --overlap 400 for the window comparison; hf2 on GPU
 ```

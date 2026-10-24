@@ -1,0 +1,218 @@
+{
+  "model": "sklearn",
+  "segment_chars": 2000,
+  "segment_overlap": 400,
+  "evidence_boundary": "val split of the released dataset only",
+  "source_dataset_sha16": "0c6e12ed82b86e36",
+  "composition": {
+    "lengths": [
+      2500,
+      5000,
+      10000,
+      20000,
+      40000
+    ],
+    "benign_per_length": 200,
+    "buried_per_length": 100,
+    "seed": 20261023,
+    "val_benign_rows": 784,
+    "val_attack_rows_eligible": 695
+  },
+  "threshold": 0.5544,
+  "doc_auc_buried_vs_long_benign": 0.5485869999999999,
+  "short_val_benign_fpr": {
+    "k": 15,
+    "n": 784,
+    "rate": 0.01913265306122449,
+    "ci95": [
+      0.011628260087266707,
+      0.03132656738058978
+    ]
+  },
+  "long_benign_fpr": {
+    "k": 117,
+    "n": 1000,
+    "rate": 0.117,
+    "ci95": [
+      0.09852807434893382,
+      0.13840332996824137
+    ]
+  },
+  "buried_recall": {
+    "k": 75,
+    "n": 500,
+    "rate": 0.15,
+    "ci95": [
+      0.12137548023138253,
+      0.1839617527402498
+    ]
+  },
+  "by_length": {
+    "2500": {
+      "windows_median": 2.0,
+      "doc_auc": 0.5976999999999999,
+      "benign_fpr": {
+        "k": 7,
+        "n": 200,
+        "rate": 0.035,
+        "ci95": [
+          0.017055324637357105,
+          0.07047146086668134
+        ]
+      },
+      "buried_recall": {
+        "k": 6,
+        "n": 100,
+        "rate": 0.06,
+        "ci95": [
+          0.02778574526665662,
+          0.12476968531222507
+        ]
+      }
+    },
+    "5000": {
+      "windows_median": 4.0,
+      "doc_auc": 0.5531,
+      "benign_fpr": {
+        "k": 9,
+        "n": 200,
+        "rate": 0.045,
+        "ci95": [
+          0.023852271724704166,
+          0.08329759366096785
+        ]
+      },
+      "buried_recall": {
+        "k": 14,
+        "n": 100,
+        "rate": 0.14,
+        "ci95": [
+          0.08526265754464905,
+          0.22137360383807236
+        ]
+      }
+    },
+    "10000": {
+      "windows_median": 7.0,
+      "doc_auc": 0.5747,
+      "benign_fpr": {
+        "k": 16,
+        "n": 200,
+        "rate": 0.08,
+        "ci95": [
+          0.04984015517626642,
+          0.12599048979512317
+        ]
+      },
+      "buried_recall": {
+        "k": 9,
+        "n": 100,
+        "rate": 0.09,
+        "ci95": [
+          0.04807199516388488,
+          0.16226374696643667
+        ]
+      }
+    },
+    "20000": {
+      "windows_median": 13.0,
+      "doc_auc": 0.54815,
+      "benign_fpr": {
+        "k": 29,
+        "n": 200,
+        "rate": 0.145,
+        "ci95": [
+          0.1028928513530641,
+          0.20048781284894374
+        ]
+      },
+      "buried_recall": {
+        "k": 15,
+        "n": 100,
+        "rate": 0.15,
+        "ci95": [
+          0.09305903191162297,
+          0.23283733332157835
+        ]
+      }
+    },
+    "40000": {
+      "windows_median": 26.0,
+      "doc_auc": 0.4898,
+      "benign_fpr": {
+        "k": 56,
+        "n": 200,
+        "rate": 0.28,
+        "ci95": [
+          0.22236792842635128,
+          0.34592431417771
+        ]
+      },
+      "buried_recall": {
+        "k": 31,
+        "n": 100,
+        "rate": 0.31,
+        "ci95": [
+          0.22779563206132378,
+          0.40626239477955695
+        ]
+      }
+    }
+  },
+  "sweep_descriptive_only": [
+    {
+      "threshold": 0.5544,
+      "short_val_benign_fpr": 0.01913265306122449,
+      "long_benign_fpr": 0.117,
+      "buried_recall": 0.15
+    },
+    {
+      "threshold": 0.6088,
+      "short_val_benign_fpr": 0.01403061224489796,
+      "long_benign_fpr": 0.101,
+      "buried_recall": 0.124
+    },
+    {
+      "threshold": 0.6633,
+      "short_val_benign_fpr": 0.011479591836734694,
+      "long_benign_fpr": 0.086,
+      "buried_recall": 0.106
+    },
+    {
+      "threshold": 0.7178,
+      "short_val_benign_fpr": 0.01020408163265306,
+      "long_benign_fpr": 0.08,
+      "buried_recall": 0.09
+    },
+    {
+      "threshold": 0.7722,
+      "short_val_benign_fpr": 0.007653061224489796,
+      "long_benign_fpr": 0.076,
+      "buried_recall": 0.082
+    },
+    {
+      "threshold": 0.8266,
+      "short_val_benign_fpr": 0.003826530612244898,
+      "long_benign_fpr": 0.063,
+      "buried_recall": 0.068
+    },
+    {
+      "threshold": 0.8811,
+      "short_val_benign_fpr": 0.003826530612244898,
+      "long_benign_fpr": 0.046,
+      "buried_recall": 0.05
+    },
+    {
+      "threshold": 0.9356,
+      "short_val_benign_fpr": 0.002551020408163265,
+      "long_benign_fpr": 0.024,
+      "buried_recall": 0.03
+    },
+    {
+      "threshold": 0.99,
+      "short_val_benign_fpr": 0.0,
+      "long_benign_fpr": 0.0,
+      "buried_recall": 0.0
+    }
+  ]
+}
