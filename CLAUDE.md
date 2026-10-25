@@ -6,6 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Aegis-ML is a **drop-in OpenAI-compatible reverse proxy / LLM firewall** that protects locally-hosted language models (llama.cpp, etc.) against prompt injection, jailbreaks, PII leaks, and data exfiltration. Clients point at Aegis instead of the LLM with no code changes required.
 
+## Roadmap
+
+The project's direction and status live in `docs/ROADMAP.md` (goal: run Aegis in
+production in front of cobblebob's LLM, then open that LLM to the public).
+Read it before starting feature work, and update its checkboxes, decisions and
+changelog in the same commit as the work. Host, network and hardware specifics
+live in the gitignored `docs/DEPLOYMENT.local.md`; never commit them.
+
 ## Commands
 
 All commands use `uv run` — the project uses `uv` for dependency management.
