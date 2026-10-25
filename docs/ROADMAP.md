@@ -71,16 +71,16 @@ Only public traffic goes through Aegis. Aegis and the LLM listen on loopback onl
   cascade2 INT8 89.8% / 0.9%.
 - HF Space demo, Docker/Compose (sklearn only), CI, tests.
 
-**Gaps for the cobblebob deployment**
-- **No `GET /v1/models`.** cobblebob calls it first, so it would fail immediately.
-- `/audit/logs` and `/metrics` have no auth (less urgent while Aegis is on loopback).
-- No monitor-only mode: no way to measure false positives on real traffic before blocking.
-- Untested on cobblebob's traffic: canary text in the system prompt, and PII
-  redaction or keyword filtering touching JSON replies (numbers or coordinates
-  matching the phone or IPv4 patterns would corrupt the JSON).
-- Per-IP rate limiting sees every request as loopback behind the bot.
+**Added for the cobblebob deployment (M2, 2026-10-24)**
+- `GET /v1/models` passthrough; unknown request fields pass through.
+- `ENFORCEMENT_MODE=monitor`, `SCAN_ROLES`, `ADMIN_TOKEN`, `CORS_ALLOW_ORIGINS`,
+  `AUDIT_RETENTION_DAYS`; JSON-safe PII redaction; audit text limited to scanned roles.
+- Torch-free `serve` extra, `deploy/` systemd user unit + install script.
+
+**Still weak**
 - Attacks buried in long documents: only 15–24% caught. Every model is weak here.
-- The Docker image installs no onnxruntime or tokenizer, so it can't run `cascade2`.
+- Untested against the live Qwen model: whether it echoes the `[SYS_REF:…]`
+  canary (checked by the M3 smoke test).
 
 ---
 
@@ -109,67 +109,70 @@ Goal: the repo contains one clear product, not a pile of experiments.
       the local research cache, not deleted.
 - [x] Trim the README results section to the current models; link the history.
 
-### M2 · Make Aegis fit cobblebob
+### M2 · Make Aegis fit cobblebob ✅
 Goal: cobblebob's public Q&A path can use Aegis as a drop-in base URL.
 
-- [ ] **`GET /v1/models`** passthrough to the backend (blocker).
-- [ ] **Unknown body fields pass through** unchanged (`chat_template_kwargs`); add a test.
-- [ ] **Monitor-only mode**: `ENFORCEMENT_MODE=monitor|enforce`. Monitor logs the
-      verdict but forwards anyway. Required for M4.
-- [ ] **Scan scope**: classify only untrusted text (user messages), not cobblebob's
-      own system prompt and state snapshots, or make it configurable per role.
-- [ ] **JSON-safe output guard**: run the output guard on real cobblebob replies;
-      make sure PII redaction can't corrupt JSON (skip or narrow numeric patterns
-      for JSON replies). Keep the canary check.
-- [ ] **Canary check**: confirm the bot's model doesn't echo or trip on `[SYS_REF:…]`
-      in cobblebob's system prompt.
-- [ ] **Block response cobblebob can handle**: a 403 body Blockhead can turn into a
-      friendly reply (403 isn't retried by Blockhead's client, which is what we want).
-- [ ] **Rate limiting**: per-visitor limits stay in Blockhead; set Aegis's limit as a
-      global safety cap, or have Blockhead forward the visitor IP in a trusted header.
-- [ ] **Admin endpoints**: bearer token on `/audit/logs` and `/metrics`, locked by default.
-- [ ] **CORS**: the app allows every origin ("permissive for demo"); restrict it.
-- [ ] **Compose threshold**: `docker-compose.yml` hard-codes `CONFIDENCE_THRESHOLD=0.70`,
-      overriding each model's tuned threshold; leave it unset by default.
-- [ ] **Privacy**: decide what visitor text is kept (`REDACT_PROMPTS_IN_LOGS`,
-      retention period, log rotation).
-- [ ] Replay test: a fixture of cobblebob-shaped requests and responses (the
-      public Q&A prompt plus benign and hostile visitor questions) runs through
-      Aegis in CI.
+- [x] **`GET /v1/models`** passthrough to the backend.
+- [x] **Unknown body fields pass through** unchanged (`chat_template_kwargs`), tested.
+- [x] **Monitor-only mode**: `ENFORCEMENT_MODE=monitor` records input blocks as
+      `would_block` and forwards. The output guard stays enforced in both modes
+      (see decisions).
+- [x] **Scan scope**: `SCAN_ROLES` (production: `user`). Measured: cascade2 flags
+      cobblebob's own public system prompt (0.92 FP32 / 0.34 INT8), so this is required.
+- [x] **JSON-safe output guard**: PII inside a JSON object is redacted in its string
+      values and the object re-serialised; numbers are never touched.
+- [-] **Canary check** against the live model: moved to the M3 smoke test (needs
+      the real Qwen model on the host).
+- [x] **Block response**: Aegis 403 → Blockhead's in-character refusal (`BLOCKED_ANSWER`).
+- [x] **Rate limiting**: per-visitor limits stay in Blockhead (unchanged); Aegis's
+      60/min is a global cap behind loopback.
+- [x] **Admin endpoints**: `ADMIN_TOKEN`; `/audit/logs` disabled without one.
+- [x] **CORS**: off unless `CORS_ALLOW_ORIGINS` is set.
+- [x] **Compose threshold**: Docker no longer pins 0.70.
+- [x] **Privacy**: visitor questions are kept for review, deleted after 30 days
+      (`AUDIT_RETENTION_DAYS=30`); the audit text holds only the scanned (user) message.
+- [x] Replay test: `tests/test_cobblebob_replay.py`, fixture generated from Blockhead's
+      prompt builder.
 
-**Done when:** the replay test passes, and a local cobblebob public Q&A call
-behaves the same through Aegis as it does straight to llama-server.
+**Done:** replay test passes; an end-to-end rehearsal on the dev machine (Blockhead's
+real client → installed Aegis → fake llama-server) behaved as designed in both modes.
 
-### M3 · Deploy on the bot's host (dark)
+### M3 · Deploy on the bot's host (dark) — prepared, not deployed
 Goal: Aegis runs next to the bot and is ready, with no traffic routed to it yet.
 
-- [ ] Measure memory: Aegis with `cascade2` INT8 on CPU must fit in the host's
-      memory headroom (see `DEPLOYMENT.local.md`). Pin it to a few cores (`taskset`); don't starve llama-server or Minecraft.
-- [ ] Run Aegis as a systemd user unit on the host, loopback only, restart on failure.
-- [ ] **(Blockhead)** Add a separate LLM base-URL setting used only by the public
-      path. Owner calls and autonomous director/goal calls keep going straight to
-      llama-server, unfiltered. Rollback is one config line.
-- [ ] Smoke test on the host: replay the M2 fixture against the live llama-server
-      through Aegis; check latency and that the bot keeps running normally.
-- [ ] Back up the audit DB; set up log rotation.
-- [ ] Simple metrics view (scrape `/metrics`, or a panel on the Blockhead dashboard).
+- [x] Measure memory: torch-free cascade2 INT8 ~950 MB RSS; ~2.5 ms fast path,
+      ~40 ms p50 escalated, on 4 pinned cores of the same CPU model as the host.
+- [x] systemd user unit (`deploy/aegis.service`: loopback, restart on failure,
+      4 pinned cores, `Nice=5`, `MemoryMax=2G`) and idempotent `deploy/install.sh`,
+      rehearsed in a sandbox.
+- [x] **(Blockhead)** Separate base URL used only by the public path
+      (`model_questions.base_url`); refuses to run if it equals `llm.base_url`.
+- [ ] **Run the install on the host** (runbook in `DEPLOYMENT.local.md`; needs the
+      owner's go-ahead).
+- [ ] Smoke test on the host: one request through the live model; check the canary
+      isn't echoed and the bot keeps running normally.
+- [x] Audit DB: retention pruning built in; DB lives on local disk in the runtime dir.
+- [ ] Simple metrics view (scrape `/metrics` with the admin token, or a dashboard panel).
 
 **Done when:** Aegis is running on the host, the smoke test passes, and the bot shows
 no regressions.
 
-### M4 · Public LLM Q&A behind Aegis
+### M4 · Public LLM Q&A behind Aegis — built, not launched
 Goal: anyone on the web can ask cobblebob free-form questions, safely.
 
-- [ ] **(Blockhead)** Build model-backed public Q&A: answers only, no tools or
-      actions, redacted state only (reuse the public facts and the owner
-      viewer-chat prompt's "question is data" rules).
-- [ ] **(Blockhead)** Send public Q&A only through Aegis; keep the existing per-IP
-      rate limits and size caps.
+- [x] **(Blockhead)** Model-backed public Q&A (`src/dashboard/public-model-chat.ts`,
+      branch `public-llm-qa`): answers only, public facts only, the visitor's question
+      is the only user message, falls back to rules-based answers when the model is
+      slow or down, 45 s deadline because the model is shared with the bot.
+- [x] **(Blockhead)** Public Q&A goes only through Aegis; per-IP limits and size caps
+      unchanged. Off by default (`model_questions.enabled`).
+- [ ] Merge `public-llm-qa`, enable `questions_enabled` + `model_questions`, deploy
+      (runbook step 2).
 - [ ] Optional soft launch: share the link with a few friends before announcing it.
-- [ ] Launch in **monitor mode**; review flagged questions by hand for 1–2 weeks.
+- [ ] Launch in **monitor mode**; review `would_block` rows by hand for 1–2 weeks.
       Record attacks vs false alarms.
 - [ ] Tune the threshold on real traffic if needed (record it in decisions).
-- [ ] Switch to **enforce**; a blocked visitor gets a friendly in-character reply.
+- [ ] Switch to **enforce**; a blocked visitor gets the in-character refusal.
 - [ ] Record the first real blocked attacks (redacted) for the write-up.
 
 **Done when:** public Q&A has been live under enforcement for a week with a known,
@@ -229,6 +232,13 @@ Record new decisions in this format: date, decision, why.
 - **2026-10-24 · No streaming work.** cobblebob sends `stream: false` and waits for the full reply.
 - **2026-10-24 · Classifier research is paused.** Rounds 1–2 produced no shippable
   model. Resume only with real-traffic evidence from M4 (parking lot).
+- **2026-10-24 · Monitor mode relaxes only the input classifier.** That's where
+  false positives come from. Canary-leak blocking and PII redaction stay on in
+  monitor mode: they almost never misfire, and what they catch (a leaked system
+  prompt, PII) would go straight to the public.
+- **2026-10-24 · Public answers fall back to rules, never fail.** If the model is
+  slow (it queues behind the bot's own decisions), down or blocked, the visitor
+  still gets the existing rules-based reply or the in-character refusal.
 - **2026-10-24 · Single worker.** The canary store is in-memory, and llama-server
   serializes requests anyway, so the LLM is the bottleneck, not Aegis.
 
@@ -251,6 +261,11 @@ Ideas that are not part of the current path. Pull one in only with a reason.
 
 Newest first. One line per shipped item.
 
+- **2026-10-24** M2 done (Aegis: `/v1/models`, monitor mode, `SCAN_ROLES`, admin
+  token, CORS, retention, JSON-safe redaction, `serve` extra, replay test). M3
+  prepared (`deploy/`, rehearsed). M4 Blockhead code built on branch `public-llm-qa`.
+  Measured cobblebob traffic: cascade2 INT8 allowed all 15 benign questions and
+  blocked all 6 attacks; sklearn false-flagged "tell me a joke" and "what are your rules?".
 - **2026-10-24** M1 done: removed Phase 2, PyTorch serving and the round-2/targeted
   experiment code; README results trimmed to sklearn / cascade2 / onnx2.
 - **2026-10-24** Owner prompts stay unfiltered: only public traffic goes through
