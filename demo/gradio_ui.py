@@ -55,16 +55,6 @@ def _load_classifier(classifier_type: str):
                 model_path=os.getenv("SKLEARN_MODEL_PATH", "models/sklearn_classifier.joblib")
             )
             clf.load()
-        elif classifier_type == "hf":
-            from app.classifiers.hf_classifier import HFClassifier
-
-            clf = HFClassifier(model_path=os.getenv("HF_MODEL_PATH", "models/hf_classifier"))
-            clf.load()
-        elif classifier_type == "hf2":
-            from app.classifiers.hf2_classifier import HF2Classifier
-
-            clf = HF2Classifier(model_path=os.getenv("HF2_MODEL_PATH", "models/hf2_classifier"))
-            clf.load()
         elif classifier_type == "onnx2":
             from app.classifiers.onnx2_classifier import ONNX2Classifier
 
@@ -243,8 +233,6 @@ async def chat_with_aegis(
         else:
             model_label = {
                 "sklearn": "TF-IDF + LogReg (Phase 1)",
-                "hf": "DistilBERT/DeBERTa (Phase 2)",
-                "hf2": "mDeBERTa-v3 Multi-Task (Phase 3)",
                 "onnx2": "mDeBERTa-v3 Multi-Task ONNX (Phase 3)",
             }.get(classifier_type, classifier_type)
         analysis_lines.append(f"**Model:** {model_label}")
@@ -501,7 +489,7 @@ def build_ui(available_classifiers: list[str] | None = None) -> gr.Blocks:
                 "The retrained Phase 1 model (word + character n-grams) now catches 28 of them "
                 "and the Phase 3 multi-task mDeBERTa model catches 30. "
                 "Click any example to load it into the message field — switch the classifier "
-                "between **sklearn**, **hf**, and **hf2** to see the difference live."
+                "between **sklearn** and **onnx2** to see the difference live."
             )
             with gr.Tabs():
                 with gr.Tab("Unicode Homoglyph (10)"):
@@ -570,8 +558,7 @@ def build_ui(available_classifiers: list[str] | None = None) -> gr.Blocks:
                 ↓
             [1] Input Guardrail
                 • Phase 1: TF-IDF + Logistic Regression (sklearn)
-                • Phase 2: Fine-tuned DistilBERT / DeBERTa-v3-small (hf)
-                • Phase 3: Multi-task mDeBERTa-v3, 7 categories (hf2 / onnx2)
+                • Phase 3: Multi-task mDeBERTa-v3, 7 categories (onnx2)
                 ↓ (blocked if malicious — 403 Forbidden)
             [2] Canary Token Injection
                 • Random unique token embedded in system prompt
@@ -638,8 +625,6 @@ def main() -> None:
             "SKLEARN_MODEL_PATH",
             "models/sklearn_classifier.joblib",
         ),
-        "hf": os.getenv("HF_MODEL_PATH", "models/hf_classifier"),
-        "hf2": os.getenv("HF2_MODEL_PATH", "models/hf2_classifier"),
         "onnx2": os.getenv(
             "ONNX2_MODEL_PATH",
             "models/hf2_classifier_onnx",

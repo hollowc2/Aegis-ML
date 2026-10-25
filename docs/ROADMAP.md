@@ -81,8 +81,6 @@ Only public traffic goes through Aegis. Aegis and the LLM listen on loopback onl
 - Per-IP rate limiting sees every request as loopback behind the bot.
 - Attacks buried in long documents: only 15–24% caught. Every model is weak here.
 - The Docker image installs no onnxruntime or tokenizer, so it can't run `cascade2`.
-- Scope sprawl: Phase 2 (`hf`, `onnx`, `cascade`) has code but no trained model.
-  The README reads like a research log.
 
 ---
 
@@ -94,22 +92,22 @@ Only public traffic goes through Aegis. Aegis and the LLM listen on loopback onl
 - [x] Commit the pending FP32-default changes (tests pass: 95 passed, 18 skipped).
 - [x] Pick the serving classifier (see decisions: `cascade2` INT8 on CPU, to verify in M3).
 
-### M1 · Cut scope
+### M1 · Cut scope ✅
 Goal: the repo contains one clear product, not a pile of experiments.
 
-- [ ] Remove Phase 2 (`hf`, `onnx`, `cascade` classifier types, `training/phase2_hf`,
-      the `hf` extra) or justify keeping it. No artifact exists for it.
-- [ ] Keep exactly three serving paths: `sklearn` (bundled, tiny), `cascade2`
-      (production) and `onnx2` (the Space). Decide whether `hf2` serving stays.
-- [ ] Keep the INT8 code path: production and the HF Space both rely on it.
-- [ ] Move round-2 / targeted experiment code (`training/round2`,
+- [x] Remove Phase 2 (`hf`, `onnx`, `cascade` classifier types, `training/phase2_hf`,
+      the `hf` and `onnx` extras).
+- [x] Keep exactly three serving paths: `sklearn`, `cascade2`, `onnx2`. `hf2`
+      (PyTorch) serving dropped; training still produces the PyTorch model and
+      exports ONNX.
+- [x] Keep the INT8 code path: production and the HF Space both rely on it.
+- [x] Delete round-2 / targeted experiment code (`training/round2`,
       `training/targeted_acceptance.py`, `prepare_dataset_targeted.py`,
-      `docs/prompts/`) under a clearly labelled research area, or delete it,
-      keeping the write-up in BENCHMARKS.md.
-- [ ] Trim the README results section to the current models; link the history.
-
-**Done when:** a newcomer can name the product and its two modes (fast / accurate)
-from the README in under a minute, and the tests and CI pass.
+      `targeted_gen.py`). The frozen eval sets stay and `training.eval_suite`
+      scores them; BENCHMARKS.md keeps the write-ups and points at commit `a0d4da1`.
+      The untracked `docs/prompts/` and `data/round2/base_pool.csv` were moved to
+      the local research cache, not deleted.
+- [x] Trim the README results section to the current models; link the history.
 
 ### M2 · Make Aegis fit cobblebob
 Goal: cobblebob's public Q&A path can use Aegis as a drop-in base URL.
@@ -130,6 +128,9 @@ Goal: cobblebob's public Q&A path can use Aegis as a drop-in base URL.
 - [ ] **Rate limiting**: per-visitor limits stay in Blockhead; set Aegis's limit as a
       global safety cap, or have Blockhead forward the visitor IP in a trusted header.
 - [ ] **Admin endpoints**: bearer token on `/audit/logs` and `/metrics`, locked by default.
+- [ ] **CORS**: the app allows every origin ("permissive for demo"); restrict it.
+- [ ] **Compose threshold**: `docker-compose.yml` hard-codes `CONFIDENCE_THRESHOLD=0.70`,
+      overriding each model's tuned threshold; leave it unset by default.
 - [ ] **Privacy**: decide what visitor text is kept (`REDACT_PROMPTS_IN_LOGS`,
       retention period, log rotation).
 - [ ] Replay test: a fixture of cobblebob-shaped requests and responses (the
@@ -250,6 +251,8 @@ Ideas that are not part of the current path. Pull one in only with a reason.
 
 Newest first. One line per shipped item.
 
+- **2026-10-24** M1 done: removed Phase 2, PyTorch serving and the round-2/targeted
+  experiment code; README results trimmed to sklearn / cascade2 / onnx2.
 - **2026-10-24** Owner prompts stay unfiltered: only public traffic goes through
   Aegis; M3 is now a dark deploy plus smoke test.
 - **2026-10-24** M0 done: target, topology and host sizing recorded; production

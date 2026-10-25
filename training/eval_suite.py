@@ -54,7 +54,7 @@ EVAL_SETS: dict[str, tuple[Path, str]] = {
     "holdout": (Path("data/holdout_eval.csv"), "category"),
     "targeted": (Path("data/targeted_eval.csv"), "category"),
     "adversarial": (Path("data/adversarial_eval.csv"), "category"),
-    # Round-2 frozen false-positive set (all benign); see training/round2/final_fp_eval.py.
+    # Frozen benign-only false-positive set (see docs/BENCHMARKS.md, round 2).
     "round2_fp": (Path("data/round2/final_fp_eval.csv"), "category"),
 }
 REPORTS_DIR = Path("reports")
@@ -202,28 +202,11 @@ def _print_report(report: dict) -> None:
 # ── Standalone loaders for already-trained models ────────────────────────────
 
 def load_classifier(classifier_type: str):
-    """Load a classifier through the API's own loader.
-
-    "cascade2_hf2" is evaluation-only: the cascade2 logic with the PyTorch HF2
-    model as the slow path, so the FP32 cascade can be measured on a GPU (the
-    FP32 ONNX graph is validated to match PyTorch at export time).
-    """
+    """Load a serving classifier through the API's own loader."""
     from app.config import Settings
     from app.main import _load_classifier
 
-    if classifier_type == "cascade2_hf2":
-        from app.classifiers.cascade_classifier import CascadeClassifier
-
-        settings = Settings()
-        clf = CascadeClassifier(
-            sklearn_clf=_load_classifier(Settings(classifier_type="sklearn")),
-            slow_clf=_load_classifier(Settings(classifier_type="hf2")),
-            low_threshold=settings.cascade_sk_low_threshold,
-            high_threshold=settings.cascade_sk_high_threshold,
-            slow_clf_label="hf2",
-        )
-    else:
-        clf = _load_classifier(Settings(classifier_type=classifier_type))
+    clf = _load_classifier(Settings(classifier_type=classifier_type))
     if not clf.is_loaded():
         raise RuntimeError(f"{classifier_type} classifier failed to load — see warnings above")
     return clf
@@ -296,13 +279,17 @@ def serving_long_metrics(clf, threshold: float) -> dict:
 
 
 def _default_threshold(classifier_type: str) -> float | None:
-    """Threshold tuned at training time, read from the model's metadata."""
+    """Threshold tuned at training time, read from the model's metadata.
+
+    "hf2" is the trained PyTorch model directory, used by
+    training.phase3_hf2.evaluate; it is not a serving classifier type.
+    """
     from app.config import Settings
 
-    settings = Settings(classifier_type=classifier_type)
+    settings = Settings()
     candidates = {
         "sklearn": Path(settings.sklearn_model_path).with_suffix(".json"),
-        "hf2": Path(settings.hf2_model_path) / "config.json",
+        "hf2": Path("models/hf2_classifier") / "config.json",
         "onnx2": Path(settings.onnx2_model_path) / "config.json",
     }
     path = candidates.get(classifier_type)
@@ -321,8 +308,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
     parser = argparse.ArgumentParser(description="Run the shared evaluation suite")
     parser.add_argument("--model", default="sklearn",
-                        choices=["sklearn", "hf", "onnx", "cascade", "hf2", "onnx2", "cascade2",
-                                 "cascade2_hf2"])
+                        choices=["sklearn", "onnx2", "cascade2"])
     parser.add_argument("--threshold", type=float, default=None,
                         help="Defaults to the value tuned at training time (as the API does)")
     parser.add_argument("--name", default=None, help="Report name (default: --model)")

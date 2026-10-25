@@ -41,7 +41,6 @@ services:
       CLASSIFIER_TYPE: ${CLASSIFIER_TYPE:-sklearn}
       CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.70}
       SKLEARN_MODEL_PATH: models/sklearn_classifier.joblib
-      HF_MODEL_PATH: models/hf_classifier
 
       # ── Backend LLM ─────────────────────────────────────────────────────────
       # Point to your llama.cpp server.
@@ -89,7 +88,6 @@ services:
     environment:
       CLASSIFIER_TYPE: ${CLASSIFIER_TYPE:-sklearn}
       SKLEARN_MODEL_PATH: models/sklearn_classifier.joblib
-      HF_MODEL_PATH: models/hf_classifier
       CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.70}
       DEMO_PORT: 7860
       # Point demo at the running Aegis-ML API service

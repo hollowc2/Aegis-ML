@@ -5,7 +5,7 @@ Phase 3 (HF2 Ultra) ONNX Runtime classifier.
 
 Serves the exported ONNX model (FP32 or INT8-quantised).
 
-Returns the same extended predict dict as HF2Classifier (backward-compatible).
+Returns the extended predict dict (malicious_prob plus threat categories).
 Temperature scaling is applied to binary_logits before softmax.
 TextPreprocessor (Unicode normalization + invisible char detection) runs
 before every inference call.

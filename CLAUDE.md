@@ -21,7 +21,7 @@ All commands use `uv run` — the project uses `uv` for dependency management.
 ### Setup
 ```bash
 uv sync                          # Base install (sklearn only)
-uv sync --extra hf               # Add HuggingFace/PyTorch support
+uv sync --extra hf2              # Add PyTorch + ONNX export (training the transformer)
 uv sync --extra dev              # Add dev tools (pytest, ruff, mypy)
 uv sync --all-extras             # Everything
 cp .env.example .env             # Configure environment
@@ -106,7 +106,7 @@ Every `POST /v1/chat/completions` request flows through:
 | `app/guardrails/input_guard.py` | Orchestrates classification; extracts text from all messages including role labels |
 | `app/guardrails/canary.py` | Token generation, injection, one-time consumption, 5-min TTL store |
 | `app/guardrails/output_guard.py` | Canary leak detection, PII redaction, harmful content filter |
-| `app/classifiers/` | Phase 1/2/3 classifiers plus ONNX and cascade variants |
+| `app/classifiers/` | sklearn, ONNX (mDeBERTa) and cascade classifiers |
 | `app/proxy/llm_proxy.py` | Canary injection into forwarded request, response content extraction/patching |
 | `app/api/routes.py` | FastAPI routes: `/v1/chat/completions`, `/health`, `/metrics`, `/audit/logs` |
 | `app/models/database.py` | Async SQLite via aiosqlite; single `audit_log` table |
@@ -114,12 +114,10 @@ Every `POST /v1/chat/completions` request flows through:
 ### Classifier Types (set via `CLASSIFIER_TYPE` in `.env`)
 
 - `sklearn` — TF-IDF (word + char n-grams) + Logistic Regression, ~1.5 ms (Phase 1, default)
-- `hf` — Fine-tuned DistilBERT/DeBERTa-v3-small, 5–15 ms, ~400 MB RAM (Phase 2)
-- `onnx` — ONNX Runtime inference of the Phase 2 model
-- `cascade` — sklearn fast-path with Phase 2 ONNX escalation
-- `hf2` — Phase 3 multi-task mDeBERTa-v3 model with threat categories, ~18 ms on GPU
-- `onnx2` — ONNX inference for Phase 3. Serves FP32 by default (same scores as `hf2`); `ONNX2_USE_INT8=true` serves the 323 MB INT8 graph, ~5 points lower recall and only ~5% faster on CPU. Either precision falls back to the other if its file is missing
+- `onnx2` — ONNX inference of the Phase 3 multi-task mDeBERTa-v3 model (threat categories). Serves FP32 by default (same scores as the PyTorch model); `ONNX2_USE_INT8=true` serves the 323 MB INT8 graph, ~5 points lower recall and only ~5% faster on CPU. Either precision falls back to the other if its file is missing
 - `cascade2` — sklearn fast-path with Phase 3 ONNX escalation; sklearn scores inside `CASCADE_SK_LOW/HIGH_THRESHOLD` are decided by the ONNX model alone, using its threshold
+
+Phase 2 (DistilBERT) and PyTorch serving (`hf2`) were removed on 2026-10-24; training still produces the PyTorch model and exports it to ONNX.
 
 All classifiers expose the same async interface and are loaded once at startup. The sklearn classifier wraps synchronous inference in `asyncio.to_thread()` to avoid blocking the event loop.
 

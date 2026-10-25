@@ -19,7 +19,7 @@ Usage:
     RUN_ADVERSARIAL_TESTS=1 uv run pytest tests/test_adversarial_regression.py -v
 
     # Override threshold or model path:
-    CLASSIFIER_TYPE=hf2 CONFIDENCE_THRESHOLD=0.70 RUN_ADVERSARIAL_TESTS=1 ...
+    CLASSIFIER_TYPE=onnx2 CONFIDENCE_THRESHOLD=0.70 RUN_ADVERSARIAL_TESTS=1 ...
 """
 
 from __future__ import annotations
@@ -62,41 +62,13 @@ def adversarial_df():
 
 @pytest.fixture(scope="module")
 def loaded_classifier():
-    """Load the classifier specified by CLASSIFIER_TYPE (default: hf2)."""
+    """Load the classifier specified by CLASSIFIER_TYPE, exactly as the API does."""
     from app.config import get_settings
+    from app.main import _load_classifier
 
-    settings = get_settings()
-    clf_type = settings.classifier_type
-
-    if clf_type == "hf2":
-        from app.classifiers.hf2_classifier import HF2Classifier
-
-        clf = HF2Classifier(model_path=settings.hf2_model_path)
-        clf.load()
-    elif clf_type == "onnx2":
-        from app.classifiers.onnx2_classifier import ONNX2Classifier
-
-        clf = ONNX2Classifier(
-            model_path=settings.onnx2_model_path, use_int8=settings.onnx2_use_int8
-        )
-        clf.load()
-    elif clf_type == "sklearn":
-        from app.classifiers.sklearn_classifier import SklearnClassifier
-
-        clf = SklearnClassifier(model_path=settings.sklearn_model_path)
-        clf.load()
-    elif clf_type == "hf":
-        from app.classifiers.hf_classifier import HFClassifier
-
-        clf = HFClassifier(model_path=settings.hf_model_path)
-        clf.load()
-    elif clf_type == "onnx":
-        from app.classifiers.onnx_classifier import ONNXClassifier
-
-        clf = ONNXClassifier(model_path=settings.onnx_model_path)
-        clf.load()
-    else:
-        pytest.skip(f"Unsupported CLASSIFIER_TYPE for adversarial tests: {clf_type}")
+    clf = _load_classifier(get_settings())
+    if not clf.is_loaded():
+        pytest.skip(f"{get_settings().classifier_type} model not available")
 
     return clf
 

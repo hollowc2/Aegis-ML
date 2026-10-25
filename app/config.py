@@ -45,16 +45,12 @@ class Settings(BaseSettings):
     backend_timeout: float = Field(default=120.0, ge=1.0)
 
     # ── Classifier ───────────────────────────────────────────────────────────
-    classifier_type: Literal["sklearn", "hf", "onnx", "cascade", "hf2", "onnx2", "cascade2"] = (
-        Field(
-            default="sklearn",
-            description=(
-                "Which classifier to use: 'sklearn' (Phase 1), 'hf' (Phase 2), "
-                "'onnx' (Phase 2 via ONNX Runtime), 'cascade' (sklearn + ONNX), "
-                "'hf2' (Phase 3 multi-task), 'onnx2' (Phase 3 ONNX), "
-                "or 'cascade2' (sklearn fast path + ONNX2 slow path)"
-            ),
-        )
+    classifier_type: Literal["sklearn", "onnx2", "cascade2"] = Field(
+        default="sklearn",
+        description=(
+            "Which classifier to use: 'sklearn' (fast, bundled), 'onnx2' (mDeBERTa "
+            "via ONNX Runtime) or 'cascade2' (sklearn fast path + onnx2 slow path)"
+        ),
     )
     confidence_threshold: float | None = Field(
         default=None,
@@ -72,22 +68,9 @@ class Settings(BaseSettings):
         default="models/sklearn_classifier.joblib",
         description="Path to the trained scikit-learn model artifact",
     )
-    hf_model_path: str = Field(
-        default="models/hf_classifier",
-        description="Path to the fine-tuned HuggingFace model directory",
-    )
-    onnx_model_path: str = Field(
-        default="models/hf_classifier_onnx",
-        description="Path to the ONNX-exported model directory (produced by export_onnx.py)",
-    )
-    # Phase 3 model paths
-    hf2_model_path: str = Field(
-        default="models/hf2_classifier",
-        description="Path to the Phase 3 multi-task HF2 model directory",
-    )
     onnx2_model_path: str = Field(
         default="models/hf2_classifier_onnx",
-        description="Path to the Phase 3 ONNX-exported HF2 model directory",
+        description="Path to the ONNX-exported mDeBERTa model directory",
     )
     onnx2_use_int8: bool = Field(
         default=False,

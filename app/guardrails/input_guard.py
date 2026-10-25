@@ -34,7 +34,8 @@ from app.models.schemas import (
 )
 
 if TYPE_CHECKING:
-    from app.classifiers.hf_classifier import HFClassifier
+    from app.classifiers.cascade_classifier import CascadeClassifier
+    from app.classifiers.onnx2_classifier import ONNX2Classifier
     from app.classifiers.sklearn_classifier import SklearnClassifier
 
 logger = logging.getLogger(__name__)
@@ -78,7 +79,7 @@ def _extract_segments(request: ChatCompletionRequest) -> list[str]:
 
 async def run_input_guardrail(
     request: ChatCompletionRequest,
-    classifier: SklearnClassifier | HFClassifier,
+    classifier: SklearnClassifier | ONNX2Classifier | CascadeClassifier,
 ) -> InputGuardrailResult:
     """
     Classify the incoming request, one message window at a time.

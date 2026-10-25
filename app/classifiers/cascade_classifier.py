@@ -1,11 +1,11 @@
 """
 app/classifiers/cascade_classifier.py
 =======================================
-Two-stage cascade classifier: sklearn fast path → ONNX/HF slow path.
+Two-stage cascade classifier: sklearn fast path → ONNX (mDeBERTa) slow path.
 
 For inputs where sklearn is highly confident (prob ≥ high_threshold or
 prob ≤ low_threshold), the verdict is returned immediately without invoking
-the heavier ONNX/HF model.  Only inputs in the ambiguous "grey zone" are
+the heavier ONNX model.  Only inputs in the ambiguous "grey zone" are
 escalated.
 
 Measured on the external benchmark with the default 0.05/0.95 band (see
@@ -21,7 +21,7 @@ The thresholds are tunable via CASCADE_SK_LOW_THRESHOLD /
 CASCADE_SK_HIGH_THRESHOLD environment variables (see config.py).
 
 Predict return dict is identical to individual classifiers plus a diagnostic
-"stage" key ("sklearn" | "onnx") for audit logging / metrics.
+"stage" key ("sklearn" | slow_clf_label) for audit logging / metrics.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ class CascadeClassifier:
     ----------
     sklearn_clf    : SklearnClassifier
         Fast first-stage classifier (~1.5 ms/request).
-    slow_clf       : ONNXClassifier | HFClassifier
+    slow_clf       : ONNX2Classifier
         Accurate slow-path classifier (~18 ms on GPU, ~70 ms p50 ONNX on 4 CPU threads).
     low_threshold  : float
         sklearn malicious_prob ≤ this → benign fast path (default 0.05).
@@ -56,7 +56,7 @@ class CascadeClassifier:
         slow_clf,
         low_threshold: float = 0.05,
         high_threshold: float = 0.95,
-        slow_clf_label: str = "onnx",
+        slow_clf_label: str = "onnx2",
     ) -> None:
         self.sklearn_clf = sklearn_clf
         self.slow_clf = slow_clf
@@ -85,7 +85,7 @@ class CascadeClassifier:
                 "label":          "benign" | "malicious",
                 "malicious_prob": float,
                 "benign_prob":    float,
-                "stage":          "sklearn" | "onnx",  # diagnostic only
+                "stage":          "sklearn" | "onnx2",  # diagnostic only
             }
         """
         if not self.is_loaded():

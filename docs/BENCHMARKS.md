@@ -402,6 +402,11 @@ Training thread caps and sequential ONNX-validation sessions are now explicit.
 
 ### Reproduce the experiment protocol
 
+> The experiment code below was removed on 2026-10-24 (roadmap M1). To rerun it,
+> check out commit `a0d4da1` or earlier. The frozen evaluation data it produced
+> (`data/targeted_eval.csv`, `data/round2/final_fp_eval.csv`) stays and is
+> scored by `training.eval_suite`.
+
 Use a local venv (`UV_PROJECT_ENVIRONMENT=~/.cache/aegis-ml-venv`) with dev/hf2
 extras, `OMP_NUM_THREADS=4`, `OPENBLAS_NUM_THREADS=4`,
 `TOKENIZERS_PARALLELISM=false`, `HSA_OVERRIDE_GFX_VERSION=11.0.0`, and prefix
@@ -431,6 +436,11 @@ for this failed round.
 
 
 ## Round 2: narrowed diagnosis and fresh false-positive set (2026-10-23)
+
+> The experiment code below was removed on 2026-10-24 (roadmap M1). To rerun it,
+> check out commit `a0d4da1` or earlier. The frozen evaluation data it produced
+> (`data/targeted_eval.csv`, `data/round2/final_fp_eval.csv`) stays and is
+> scored by `training.eval_suite`.
 
 **Outcome: no candidate model was trained; released models are unchanged**
 (SHA256 re-verified in [`reports/round2/summary.json`](../reports/round2/summary.json)).

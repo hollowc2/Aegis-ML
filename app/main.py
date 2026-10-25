@@ -5,7 +5,7 @@ FastAPI application entry point.
 
 Manages the app lifespan (startup / shutdown):
   - Initialises the audit database
-  - Loads the classifier (sklearn or HF, via CLASSIFIER_TYPE env var)
+  - Loads the classifier (sklearn, onnx2 or cascade2, via CLASSIFIER_TYPE)
   - Creates the shared httpx.AsyncClient
   - Mounts all routes and middleware
 """
@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
     logger.info("═══════════════════════════════════════════════")
     logger.info("Classifier type : %s", settings.classifier_type)
     logger.info("Backend URL     : %s", settings.backend_url)
-    if settings.classifier_type in ("cascade", "cascade2"):
+    if settings.classifier_type == "cascade2":
         logger.info(
             "Cascade band    : sk_low=%.2f  sk_high=%.2f",
             settings.cascade_sk_low_threshold,
@@ -111,84 +111,6 @@ def _load_classifier(settings):
             )
             # Don't crash — the health endpoint will report degraded state
             # and all requests will be blocked (fail-secure)
-        return clf
-
-    elif settings.classifier_type == "hf":
-        from app.classifiers.hf_classifier import HFClassifier
-
-        clf = HFClassifier(model_path=settings.hf_model_path)
-        try:
-            clf.load()
-        except FileNotFoundError as exc:
-            logger.warning(
-                "HuggingFace model not found (%s). "
-                "Run training first: python -m training.phase2_hf.train",
-                exc,
-            )
-        return clf
-
-    elif settings.classifier_type == "onnx":
-        from app.classifiers.onnx_classifier import ONNXClassifier
-
-        clf = ONNXClassifier(model_path=settings.onnx_model_path)
-        try:
-            clf.load()
-        except (FileNotFoundError, ImportError) as exc:
-            logger.warning(
-                "ONNX model not loaded (%s). Run: python -m training.phase2_hf.export_onnx",
-                exc,
-            )
-        return clf
-
-    elif settings.classifier_type == "cascade":
-        from app.classifiers.cascade_classifier import CascadeClassifier
-        from app.classifiers.onnx_classifier import ONNXClassifier
-        from app.classifiers.sklearn_classifier import SklearnClassifier
-
-        sklearn_clf = SklearnClassifier(model_path=settings.sklearn_model_path)
-        onnx_clf = ONNXClassifier(model_path=settings.onnx_model_path)
-
-        try:
-            sklearn_clf.load()
-        except FileNotFoundError as exc:
-            logger.warning(
-                "Cascade: scikit-learn model not found (%s). "
-                "Run: python -m training.phase1_sklearn.train",
-                exc,
-            )
-        try:
-            onnx_clf.load()
-        except (FileNotFoundError, ImportError) as exc:
-            logger.warning(
-                "Cascade: ONNX model not loaded (%s). "
-                "Run: python -m training.phase2_hf.export_onnx",
-                exc,
-            )
-
-        clf = CascadeClassifier(
-            sklearn_clf=sklearn_clf,
-            slow_clf=onnx_clf,
-            low_threshold=settings.cascade_sk_low_threshold,
-            high_threshold=settings.cascade_sk_high_threshold,
-        )
-        logger.info(
-            "Cascade thresholds: sk_low=%.2f  sk_high=%.2f",
-            settings.cascade_sk_low_threshold,
-            settings.cascade_sk_high_threshold,
-        )
-        return clf
-
-    elif settings.classifier_type == "hf2":
-        from app.classifiers.hf2_classifier import HF2Classifier
-
-        clf = HF2Classifier(model_path=settings.hf2_model_path)
-        try:
-            clf.load()
-        except (FileNotFoundError, RuntimeError) as exc:
-            logger.warning(
-                "HF2 model not loaded (%s). Run: python -m training.phase3_hf2.train",
-                exc,
-            )
         return clf
 
     elif settings.classifier_type == "onnx2":
@@ -252,7 +174,7 @@ def _load_classifier(settings):
     else:
         raise ValueError(
             f"Unknown CLASSIFIER_TYPE: {settings.classifier_type!r}. "
-            "Must be one of: 'sklearn', 'hf', 'onnx', 'cascade', 'hf2', 'onnx2', 'cascade2'."
+            "Must be one of: 'sklearn', 'onnx2', 'cascade2'."
         )
 
 

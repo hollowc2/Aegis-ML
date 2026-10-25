@@ -58,8 +58,8 @@ their base URL. A blocked input never reaches the backend model.
 - **Observable:** every allow/block decision goes to a SQLite audit log, with
   Prometheus metrics and per-IP rate limiting.
 - **Pick your speed/accuracy trade-off:** a ~1.5 ms CPU baseline ships in the
-  repo; DeBERTa classifiers and an sklearn → ONNX cascade are optional, with the
-  full training, evaluation, and INT8 export pipeline included.
+  repo; an sklearn → mDeBERTa (ONNX) cascade is optional, with the full
+  training, evaluation, and ONNX export pipeline included.
 - **Easy to run:** locked dependencies, Docker, Compose, and a hosted demo.
 
 ## How is this different?
@@ -118,14 +118,13 @@ are returned as `502` errors rather than being treated as safe model output.
 See [the threat model](docs/THREAT_MODEL.md) for trust boundaries and known
 limitations.
 
-## Classifier implementations
+## Classifiers: fast or accurate
 
-| Stage | Implementation | Purpose | Artifact availability |
-|---|---|---|---|
-| Phase 1 | TF-IDF + logistic regression | Lightweight baseline and fast path | Bundled |
-| Phase 2 | DistilBERT or DeBERTa-v3-small | Semantic binary classification | Train/export separately |
-| Phase 3 | Multi-task mDeBERTa-v3-base (multilingual) | Binary verdict plus 7 threat categories | Train/export separately |
-| Cascade | sklearn → ONNX | Escalate ambiguous prompts (~24%) to a neural model | Requires ONNX artifact |
+| `CLASSIFIER_TYPE` | What it is | When to use it |
+|---|---|---|
+| `sklearn` (default) | TF-IDF (word + character n-grams) + logistic regression, 3.5 MB, bundled | Anywhere; ~1.4 ms on CPU |
+| `cascade2` | sklearn first; the ~24% of prompts it is unsure about go to a multi-task mDeBERTa-v3 model (ONNX) | Production, when the 1.1 GB model (or 323 MB INT8) fits |
+| `onnx2` | The mDeBERTa model alone, plus 7 threat categories | Evaluation, or when every prompt should get the transformer |
 
 On the external benchmark — 7,435 prompts from five public datasets' test
 splits, never trained or tuned on — at thresholds chosen on validation data
@@ -133,46 +132,23 @@ for ≤2% false positives:
 
 | Model | Recall | FPR | ROC-AUC | Latency (p50) |
 |---|---:|---:|---:|---:|
-| Previous release (v1 sklearn, 0.70) | 70.5% | 6.3% | 0.928 | — |
-| Phase 1 sklearn (bundled) | 91.9% | 1.8% | 0.985 | 1.4 ms (CPU) |
-| Phase 3 mDeBERTa | 93.4% | 1.3% | 0.987 | 18 ms (GPU) |
-| Phase 3 ONNX INT8 | 88.5% | 1.0% | 0.978 | 39 ms (CPU) |
-| cascade2 (sklearn → mDeBERTa FP32) | 93.5% | 1.2% | 0.985 | — |
-| cascade2 (sklearn → ONNX INT8, CPU) | 89.8% | 0.9% | 0.983 | 2.0 ms (p95 67 ms) |
+| sklearn (bundled) | 91.9% | 1.8% | 0.985 | 1.4 ms (CPU) |
+| cascade2, FP32 | 93.5% | 1.2% | 0.985 | — |
+| cascade2, INT8 (CPU) | 89.8% | 0.9% | 0.983 | 2.0 ms (p95 67 ms) |
+| onnx2, FP32 | 93.4% | 1.3% | 0.987 | 18 ms (GPU) |
+| onnx2, INT8 (CPU) | 88.5% | 1.0% | 0.978 | 39 ms |
 
-Compared with the previous release, the bundled sklearn model catches about
-21 more attacks per 100 and wrongly blocks roughly 3.5× fewer benign prompts.
 The transformer adds a couple of points of recall and is much stronger on
 multilingual and obfuscated attacks; the cascade keeps that accuracy while
-sending only the ~24% of prompts sklearn is unsure about to it. `onnx2` and
-`cascade2` serve the FP32 ONNX graph by default, which scores the same as the
-PyTorch model. INT8 (`ONNX2_USE_INT8=true`) shrinks the graph from 1.1 GB to
-323 MB but costs about 5 points of recall and is only ~5% faster on CPU, so use
-it only when memory is the constraint. Latency is
+sending only the prompts sklearn is unsure about to it. FP32 is the default;
+INT8 (`ONNX2_USE_INT8=true`) shrinks the graph from 1.1 GB to 323 MB for about
+5 points of recall, so use it when memory is the constraint. Latency is
 single-request on a Ryzen 7 1700 (4 threads) / RX 7700 XT.
 
-The previous release's published 0.998 AUC came from a random split of a
-dataset with heavy near-duplication; the rebuilt dataset is deduplicated,
-length-balanced and split by near-duplicate family. Hand-written
-out-of-distribution attacks (indirect injection, exfiltration, attacks buried
-in long text) remain much harder — full methodology, per-category results and
-caveats are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
-
-The targeted retraining experiment was rejected: sklearn external FPR rose
-from 1.85% to 2.91% (limit 2%), so the bundled baseline was restored and
-transformer retraining was halted. On the frozen targeted set, indirect recall
-rose from 1.8% to 14.0% and exfiltration from 2.0% to 21.1%, but buried recall
-stayed at 0% and security-topic FPR worsened from 17% to 23%. The table above
-continues to describe the retained baseline models. See the
-[failed experiment, before/after results and licences](docs/BENCHMARKS.md#targeted-experiment-rejected-2026-10-22).
-
-A second round (2026-10-23) trained no new model. It diagnosed the failure on
-train/val data only: the new attack rows carried lexical shortcuts, and the
-candidate's own validation split hid weak slices. It also added a frozen,
-benign-only false-positive set of 467 rows. On that set, the released
-mDeBERTa flags 0.9% of benign requests overall and 1.8% of security-topic
-requests. sklearn flags 2.6% and 2.7%. Attack-side work was not run. See
-[round 2](docs/BENCHMARKS.md#round-2-narrowed-diagnosis-and-fresh-false-positive-set-2026-10-23).
+Hand-written out-of-distribution attacks (indirect injection, exfiltration,
+attacks buried in long text) remain much harder for every model. Methodology,
+per-category results, the frozen false-positive set and the history of
+rejected retraining experiments are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
 ## Quick start
 
@@ -242,7 +218,7 @@ Copy `.env.example` to `.env`. Common settings:
 | Variable | Default | Description |
 |---|---:|---|
 | `BACKEND_URL` | `http://localhost:8080/v1/chat/completions` | Backend model endpoint |
-| `CLASSIFIER_TYPE` | `sklearn` | `sklearn`, `hf`, `onnx`, `cascade`, `hf2`, `onnx2`, or `cascade2` |
+| `CLASSIFIER_TYPE` | `sklearn` | `sklearn`, `cascade2`, or `onnx2` |
 | `CONFIDENCE_THRESHOLD` | model's tuned value | Block at or above this malicious probability; unset uses the threshold tuned for the loaded model |
 | `RATE_LIMIT_PER_MINUTE` | `60` | Per-IP request limit |
 | `REDACT_PROMPTS_IN_LOGS` | `false` | Exclude prompt text from audit records |
