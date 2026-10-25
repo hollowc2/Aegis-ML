@@ -4,13 +4,20 @@ app/api/routes.py
 All FastAPI route handlers:
 
   POST /v1/chat/completions  — main reverse-proxy endpoint
+  GET  /v1/models            — passthrough to the backend's model list
   GET  /health               — liveness / readiness check
-  GET  /metrics              — Prometheus text metrics
-  GET  /audit/logs           — recent audit log entries (debug)
+  GET  /metrics              — Prometheus text metrics (ADMIN_TOKEN if set)
+  GET  /audit/logs           — recent audit log entries (requires ADMIN_TOKEN)
+
+ENFORCEMENT_MODE=monitor records input-classifier blocks as "would_block" and
+forwards the request anyway, so false positives can be measured on real
+traffic. The output guard (canary leak, PII redaction) is enforced in both
+modes: it has almost no false positives, and what it catches is the damage.
 """
 
 from __future__ import annotations
 
+import hmac
 import logging
 import time
 import uuid
@@ -34,6 +41,7 @@ from app.models.schemas import (
 )
 from app.proxy.llm_proxy import (
     extract_assistant_content,
+    fetch_backend_models,
     forward_to_backend,
     patch_response_content,
 )
@@ -69,6 +77,11 @@ OUTPUT_BLOCKS = Counter(
     "aegis_output_blocks_total",
     "Responses blocked at output guardrail",
 )
+MONITOR_FLAGS = Counter(
+    "aegis_monitor_flags_total",
+    "Verdicts monitor mode recorded but did not enforce",
+    ["stage"],
+)
 
 
 # ── Dependency helpers ────────────────────────────────────────────────────────
@@ -86,6 +99,29 @@ async def get_http_client(request: Request) -> httpx.AsyncClient:
 
 async def get_limiter(request: Request) -> Limiter:
     return request.app.state.limiter
+
+
+def _require_admin(request: Request, *, required: bool) -> None:
+    """Check the ADMIN_TOKEN bearer token.
+
+    With no token configured, endpoints that need one (*required*) are
+    disabled and the rest stay open.
+    """
+    token = get_settings().admin_token
+    if not token:
+        if required:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Disabled: set ADMIN_TOKEN to enable this endpoint.",
+            )
+        return
+    supplied = request.headers.get("authorization", "")
+    if not hmac.compare_digest(supplied.encode(), f"Bearer {token}".encode()):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid admin token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -122,34 +158,46 @@ async def chat_completions(
     clf_elapsed = time.perf_counter() - clf_start
     CLASSIFIER_LATENCY.observe(clf_elapsed)
 
+    input_verdict = "allow"
     if input_result.verdict == GuardrailVerdict.block:
-        INPUT_BLOCKS.inc()
-        REQUESTS_TOTAL.labels(verdict="blocked_input").inc()
-        elapsed_ms = (time.perf_counter() - start) * 1000
+        if get_settings().enforcement_mode == "monitor":
+            input_verdict = "would_block"
+            MONITOR_FLAGS.labels(stage="input").inc()
+            logger.warning(
+                "MONITOR would block request %s | confidence=%.2f | threat=%s | ip=%s",
+                request_id,
+                input_result.confidence,
+                input_result.threat_category.value,
+                client_ip,
+            )
+        else:
+            INPUT_BLOCKS.inc()
+            REQUESTS_TOTAL.labels(verdict="blocked_input").inc()
+            elapsed_ms = (time.perf_counter() - start) * 1000
 
-        await log_audit_entry(
-            request_id=request_id,
-            client_ip=client_ip,
-            input_text=_safe_text(body),
-            input_verdict="block",
-            input_confidence=input_result.confidence,
-            input_threat=input_result.threat_category.value,
-            output_verdict="n/a",
-            output_threat="none",
-            latency_ms=elapsed_ms,
-        )
+            await log_audit_entry(
+                request_id=request_id,
+                client_ip=client_ip,
+                input_text=_safe_text(body),
+                input_verdict="block",
+                input_confidence=input_result.confidence,
+                input_threat=input_result.threat_category.value,
+                output_verdict="n/a",
+                output_threat="none",
+                latency_ms=elapsed_ms,
+            )
 
-        logger.warning(
-            "BLOCKED request %s | confidence=%.2f | threat=%s | ip=%s",
-            request_id,
-            input_result.confidence,
-            input_result.threat_category.value,
-            client_ip,
-        )
-        return JSONResponse(
-            status_code=status.HTTP_403_FORBIDDEN,
-            content=BlockedResponse().model_dump(),
-        )
+            logger.warning(
+                "BLOCKED request %s | confidence=%.2f | threat=%s | ip=%s",
+                request_id,
+                input_result.confidence,
+                input_result.threat_category.value,
+                client_ip,
+            )
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content=BlockedResponse().model_dump(),
+            )
 
     # ── 2 & 3. Forward to backend (canary injected inside forward_to_backend) ──
     try:
@@ -195,7 +243,7 @@ async def chat_completions(
             request_id=request_id,
             client_ip=client_ip,
             input_text=_safe_text(body),
-            input_verdict="allow",
+            input_verdict=input_verdict,
             input_confidence=input_result.confidence,
             input_threat=input_result.threat_category.value,
             output_verdict="block",
@@ -225,13 +273,13 @@ async def chat_completions(
     # ── 5. Audit + return ─────────────────────────────────────────────────────
     elapsed_ms = (time.perf_counter() - start) * 1000
     REQUEST_LATENCY.observe(elapsed_ms / 1000)
-    REQUESTS_TOTAL.labels(verdict="allowed").inc()
+    REQUESTS_TOTAL.labels(verdict=input_verdict if input_verdict != "allow" else "allowed").inc()
 
     await log_audit_entry(
         request_id=request_id,
         client_ip=client_ip,
         input_text=_safe_text(body),
-        input_verdict="allow",
+        input_verdict=input_verdict,
         input_confidence=input_result.confidence,
         input_threat=input_result.threat_category.value,
         output_verdict=output_result.verdict.value,
@@ -256,15 +304,36 @@ async def health(request: Request):
     )
 
 
+@router.get("/v1/models")
+async def list_models(http_client: httpx.AsyncClient = Depends(get_http_client)):
+    """Pass the backend's model list through, so OpenAI clients can probe Aegis."""
+    try:
+        return JSONResponse(content=await fetch_backend_models(http_client))
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Backend LLM timed out."
+        )
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Backend returned {exc.response.status_code}.",
+        )
+    except Exception as exc:
+        logger.exception("Unexpected backend error listing models: %s", exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Backend error.")
+
+
 @router.get("/metrics")
-async def metrics():
-    """Prometheus text metrics endpoint."""
+async def metrics(request: Request):
+    """Prometheus text metrics endpoint (requires ADMIN_TOKEN when one is set)."""
+    _require_admin(request, required=False)
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @router.get("/audit/logs")
-async def audit_logs(limit: int = 50):
-    """Return the most recent audit log entries (for debugging / monitoring)."""
+async def audit_logs(request: Request, limit: int = 50):
+    """Return the most recent audit log entries. Requires ADMIN_TOKEN."""
+    _require_admin(request, required=True)
     if limit > 500:
         limit = 500
     rows = await get_recent_logs(limit=limit)

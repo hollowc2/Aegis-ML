@@ -53,12 +53,22 @@ def _db_path() -> str:
     return str(path)
 
 
+async def _prune(db: aiosqlite.Connection) -> None:
+    """Delete entries older than AUDIT_RETENTION_DAYS (0 keeps everything)."""
+    days = get_settings().audit_retention_days
+    if days > 0:
+        await db.execute(
+            "DELETE FROM audit_log WHERE timestamp < ?", (time.time() - days * 86400,)
+        )
+
+
 async def init_db() -> None:
     """Create the audit_log table if it doesn't already exist."""
     db_path = _db_path()
     async with aiosqlite.connect(db_path) as db:
         await db.execute(CREATE_TABLE_SQL)
         await db.execute(CREATE_INDEX_SQL)
+        await _prune(db)
         await db.commit()
     logger.info("Audit database initialised at %s", db_path)
 
@@ -104,6 +114,7 @@ async def log_audit_entry(
                     latency_ms,
                 ),
             )
+            await _prune(db)
             await db.commit()
     except Exception as exc:  # pragma: no cover
         logger.error("Failed to write audit log entry: %s", exc)

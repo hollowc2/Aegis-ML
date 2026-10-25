@@ -6,10 +6,12 @@ All values can be set via environment variables or a .env file.
 """
 
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+Role = Literal["system", "user", "assistant", "tool"]
 
 
 class Settings(BaseSettings):
@@ -142,10 +144,46 @@ class Settings(BaseSettings):
         description="Maximum requests per minute per IP",
     )
 
+    # ── Enforcement ───────────────────────────────────────────────────────────
+    enforcement_mode: Literal["enforce", "monitor"] = Field(
+        default="enforce",
+        description=(
+            "'enforce' blocks and redacts. 'monitor' only records what would have "
+            "been blocked or redacted and returns the backend response unchanged, "
+            "so false positives can be measured on real traffic before enforcing."
+        ),
+    )
+    scan_roles: Annotated[list[Role], NoDecode] = Field(
+        default=["system", "user", "assistant", "tool"],
+        description=(
+            "Message roles the input classifier scores. Narrow it (e.g. to 'user') "
+            "when the caller writes the system prompt and history itself and only "
+            "user messages carry untrusted text. Comma-separated."
+        ),
+    )
+
+    # ── Access control ────────────────────────────────────────────────────────
+    admin_token: str = Field(
+        default="",
+        description=(
+            "Bearer token for /audit/logs and /metrics. Unset: /audit/logs is "
+            "disabled and /metrics is open."
+        ),
+    )
+    cors_allow_origins: Annotated[list[str], NoDecode] = Field(
+        default=[],
+        description="Browser origins allowed to call the API (CORS), comma-separated. Empty = none.",
+    )
+
     # ── Database ──────────────────────────────────────────────────────────────
     database_url: str = Field(
         default="sqlite+aiosqlite:///./logs/aegis_audit.db",
         description="SQLite database URL for audit logs",
+    )
+    audit_retention_days: float = Field(
+        default=0,
+        ge=0,
+        description="Delete audit entries older than this many days (0 = keep forever)",
     )
 
     # ── Demo UI ───────────────────────────────────────────────────────────────
@@ -154,6 +192,19 @@ class Settings(BaseSettings):
         default="http://localhost:8000",
         description="Base URL of the running Aegis-ML service (used by the Gradio demo)",
     )
+
+    @field_validator("scan_roles", "cors_allow_origins", mode="before")
+    @classmethod
+    def split_comma_list(cls, v):
+        """Accept "user,system" or a JSON list from the environment."""
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("["):
+                import json
+
+                return json.loads(v)
+            return [item.strip() for item in v.split(",") if item.strip()]
+        return v
 
     @field_validator("confidence_threshold")
     @classmethod

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Collection
 from typing import TYPE_CHECKING
 
 from app.classifiers import resolve_threshold
@@ -48,11 +49,15 @@ SEGMENT_CHARS = 2000
 SEGMENT_OVERLAP = 400
 
 
-def _extract_segments(request: ChatCompletionRequest) -> list[str]:
+def _extract_segments(
+    request: ChatCompletionRequest, roles: Collection[str] | None = None
+) -> list[str]:
     """
     Split the request into the pieces that are classified independently.
 
-    Every message is untrusted (see docs/THREAT_MODEL.md), so each one is scored
+    By default every message is untrusted (see docs/THREAT_MODEL.md). *roles*
+    narrows scanning to those message roles (SCAN_ROLES), for callers that
+    write the system prompt and history themselves. Each message is scored
     on its own and the request takes the most malicious score. Concatenating
     messages instead would let a long benign system prompt or chat history
     dilute an attack, or push it past the transformer's truncation limit.
@@ -64,6 +69,8 @@ def _extract_segments(request: ChatCompletionRequest) -> list[str]:
     segments: list[str] = []
     step = SEGMENT_CHARS - SEGMENT_OVERLAP
     for msg in request.messages:
+        if roles is not None and msg.role.value not in roles:
+            continue
         content = msg.content.strip()
         if not content:
             continue
@@ -88,7 +95,7 @@ async def run_input_guardrail(
         InputGuardrailResult with verdict=block if malicious, allow otherwise.
     """
     settings = get_settings()
-    segments = _extract_segments(request)
+    segments = _extract_segments(request, settings.scan_roles)
 
     if len(segments) > settings.max_scan_segments:
         logger.warning(

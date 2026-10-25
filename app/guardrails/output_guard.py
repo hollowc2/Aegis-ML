@@ -14,8 +14,10 @@ Fail-secure: any exception → block the response.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
+from typing import Any
 
 from app.guardrails.canary import consume_token
 from app.models.schemas import (
@@ -176,10 +178,10 @@ def _check_canary(content: str, request_id: str) -> OutputGuardrailResult | None
     return None
 
 
-def _redact_pii(content: str) -> tuple[str, bool]:
-    """Apply all PII patterns to *content*, returning (redacted_text, was_pii_found)."""
+def _redact_text(text: str) -> tuple[str, bool]:
+    """Apply all PII patterns to plain *text*, returning (redacted_text, was_pii_found)."""
     found = False
-    result = content
+    result = text
     for name, pattern, replacement in _PII_PATTERNS:
         new_result, n_subs = pattern.subn(replacement, result)
         if n_subs:
@@ -187,6 +189,51 @@ def _redact_pii(content: str) -> tuple[str, bool]:
             logger.debug("Redacted %d %s pattern(s) from output", n_subs, name)
             result = new_result
     return result, found
+
+
+def _redact_json_value(value: Any) -> tuple[Any, bool]:
+    """Redact PII inside the strings of a parsed JSON value (keys and values)."""
+    if isinstance(value, str):
+        return _redact_text(value)
+    if isinstance(value, list):
+        items = [_redact_json_value(v) for v in value]
+        return [v for v, _ in items], any(f for _, f in items)
+    if isinstance(value, dict):
+        out, found = {}, False
+        for k, v in value.items():
+            new_k, fk = _redact_text(k)
+            new_v, fv = _redact_json_value(v)
+            out[new_k] = new_v
+            found = found or fk or fv
+        return out, found
+    return value, False
+
+
+def _redact_pii(content: str) -> tuple[str, bool]:
+    """
+    Redact PII from *content*, returning (redacted_text, was_pii_found).
+
+    Replies that carry a JSON object (bare, fenced or after some prose) are
+    redacted inside its string values and re-serialised, so redaction can never
+    make the JSON unparseable for a client that acts on it. Numbers stay
+    untouched, which also keeps coordinates and counts from matching the
+    phone/IP patterns. Text around the object is redacted as plain text.
+    """
+    start, end = content.find("{"), content.rfind("}")
+    if start != -1 and end > start:
+        try:
+            parsed = json.loads(content[start : end + 1])
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, dict):
+            before, found_before = _redact_text(content[:start])
+            obj, found_obj = _redact_json_value(parsed)
+            after, found_after = _redact_text(content[end + 1 :])
+            if not (found_before or found_obj or found_after):
+                return content, False
+            body = json.dumps(obj, ensure_ascii=False) if found_obj else content[start : end + 1]
+            return before + body + after, True
+    return _redact_text(content)
 
 
 def _check_harmful(content: str) -> str | None:

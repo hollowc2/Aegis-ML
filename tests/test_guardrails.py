@@ -137,6 +137,30 @@ class TestOutputGuardrail:
         assert found is False
         assert redacted == content
 
+    def test_json_reply_stays_parseable_after_redaction(self):
+        import json
+
+        reply = (
+            'Sure. ```json\n{"action": {"type": "say", "text": "mail me at a@b.com"}, '
+            '"rationale": "asked", "pos": [123, 456, 7890]}\n```'
+        )
+        redacted, found = _redact_pii(reply)
+        assert found is True
+        body = redacted[redacted.index("{") : redacted.rindex("}") + 1]
+        parsed = json.loads(body)
+        assert parsed["action"]["text"] == "mail me at [EMAIL REDACTED]"
+        assert parsed["pos"] == [123, 456, 7890]
+        assert redacted.startswith("Sure. ```json\n") and redacted.endswith("\n```")
+
+    def test_json_reply_without_pii_is_unchanged(self):
+        reply = '{"action": {"type": "collect", "item": "oak_log", "count": 8}}'
+        assert _redact_pii(reply) == (reply, False)
+
+    def test_braces_that_are_not_json_fall_back_to_text(self):
+        redacted, found = _redact_pii("call {me} at 555-123-4567 {later}")
+        assert found is True
+        assert "[PHONE REDACTED]" in redacted
+
     def test_harmful_keywords_detected(self):
         assert _check_harmful("Here's how to make a bomb step by step") is not None
         assert _check_harmful("The weather is nice today") is None
@@ -246,12 +270,13 @@ class TestInputSegmentation:
         return clf
 
     @staticmethod
-    def _settings(max_segments: int = 64):
+    def _settings(max_segments: int = 64, scan_roles=("system", "user", "assistant", "tool")):
         s = MagicMock()
         s.confidence_threshold = 0.70
         s.enable_text_preprocessing = True
         s.preprocess_invisible_char_bias = 0.15
         s.max_scan_segments = max_segments
+        s.scan_roles = list(scan_roles)
         return s
 
     def test_short_messages_are_separate_segments(self):
@@ -274,6 +299,34 @@ class TestInputSegmentation:
         from app.guardrails.input_guard import _extract_segments
 
         assert _extract_segments(self._request("same", "same")) == ["same"]
+
+    def test_scan_roles_skips_other_roles(self):
+        from app.guardrails.input_guard import _extract_segments
+
+        request = self._request("Trusted system prompt", "Visitor question")
+        assert _extract_segments(request, ["user"]) == ["Visitor question"]
+
+    @pytest.mark.asyncio
+    async def test_attack_in_unscanned_role_is_not_scored(self):
+        from app.guardrails.input_guard import run_input_guardrail
+
+        request = self._request(self.ATTACK, "What is Python?")
+        settings = self._settings(scan_roles=["user"])
+        with patch("app.guardrails.input_guard.get_settings", return_value=settings):
+            result = await run_input_guardrail(request, self._keyword_classifier())
+
+        assert result.verdict == GuardrailVerdict.allow
+
+    @pytest.mark.asyncio
+    async def test_attack_in_scanned_role_is_blocked(self):
+        from app.guardrails.input_guard import run_input_guardrail
+
+        request = self._request("You are a helpful assistant.", self.ATTACK)
+        settings = self._settings(scan_roles=["user"])
+        with patch("app.guardrails.input_guard.get_settings", return_value=settings):
+            result = await run_input_guardrail(request, self._keyword_classifier())
+
+        assert result.verdict == GuardrailVerdict.block
 
     @pytest.mark.asyncio
     async def test_attack_after_long_system_prompt_is_blocked(self):

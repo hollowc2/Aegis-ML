@@ -86,6 +86,15 @@ notebook = [
     { name = "plotly" },
     { name = "seaborn" },
 ]
+serve = [
+    { name = "huggingface-hub" },
+    { name = "onnxruntime" },
+    { name = "protobuf" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "sentencepiece" },
+    { name = "transformers" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -98,6 +107,7 @@ requires-dist = [
     { name = "gradio", specifier = ">=5.23.0,<6.0.0" },
     { name = "httpx", specifier = ">=0.28.0,<1.0.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28.0" },
+    { name = "huggingface-hub", marker = "extra == 'serve'", specifier = ">=0.26.0" },
     { name = "ipykernel", marker = "extra == 'notebook'", specifier = ">=6.29.0" },
     { name = "joblib", specifier = ">=1.4.0,<2.0.0" },
     { name = "jupyter", marker = "extra == 'notebook'", specifier = ">=1.1.0" },
@@ -105,6 +115,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.13.0" },
     { name = "numpy", specifier = ">=1.26.0,<3.0.0" },
     { name = "onnxruntime", marker = "extra == 'hf2'", specifier = ">=1.20.0" },
+    { name = "onnxruntime", marker = "extra == 'serve'", specifier = ">=1.20.0" },
     { name = "onnxscript", specifier = ">=0.6.2,<1.0.0" },
     { name = "optimum", extras = ["onnxruntime"], marker = "extra == 'hf2'", specifier = ">=1.23.0" },
     { name = "pandas", specifier = ">=2.2.0,<3.0.0" },
@@ -112,6 +123,7 @@ requires-dist = [
     { name = "plotly", marker = "extra == 'notebook'", specifier = ">=5.24.0" },
     { name = "prometheus-client", specifier = ">=0.21.0" },
     { name = "protobuf", marker = "extra == 'hf2'", specifier = ">=5.29.0" },
+    { name = "protobuf", marker = "extra == 'serve'", specifier = ">=5.29.0" },
     { name = "pydantic", specifier = ">=2.10.0,<3.0.0" },
     { name = "pydantic-settings", specifier = ">=2.7.0,<3.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0,<9.0.0" },
@@ -120,15 +132,18 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
     { name = "scikit-learn", specifier = "==1.8.0" },
     { name = "scipy", marker = "extra == 'hf2'", specifier = ">=1.13.0" },
+    { name = "scipy", marker = "extra == 'serve'", specifier = ">=1.13.0" },
     { name = "seaborn", marker = "extra == 'notebook'", specifier = ">=0.13.0" },
     { name = "sentencepiece", marker = "extra == 'hf2'", specifier = ">=0.2.0" },
+    { name = "sentencepiece", marker = "extra == 'serve'", specifier = ">=0.2.0" },
     { name = "slowapi", specifier = ">=0.1.9" },
     { name = "torch", marker = "extra == 'hf2'", specifier = ">=2.5.0,<2.12.0", index = "https://download.pytorch.org/whl/rocm7.2" },
     { name = "transformers", marker = "extra == 'hf2'", specifier = ">=4.47.0,<5.0.0" },
+    { name = "transformers", marker = "extra == 'serve'", specifier = ">=4.47.0,<5.0.0" },
     { name = "triton-rocm", marker = "sys_platform == 'linux' and extra == 'hf2'", specifier = ">=3.6.0", index = "https://download.pytorch.org/whl/rocm7.2" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0,<1.0.0" },
 ]
-provides-extras = ["hf2", "dev", "notebook"]
+provides-extras = ["serve", "hf2", "dev", "notebook"]
 
 [[package]]
 name = "aiofiles"

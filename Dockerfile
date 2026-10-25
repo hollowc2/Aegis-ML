@@ -1,11 +1,11 @@
 # ══════════════════════════════════════════════════════════════════════════════
 # Aegis-ML — Multi-stage Docker build using UV
-# Target image: ~600 MB (base deps only, no HF/torch)
-#               ~2.5 GB with HF extra
+# Target image: ~600 MB (base deps only, sklearn)
+#               larger with the serve extra (onnxruntime + tokenizer, no torch)
 #
 # Build:
 #   docker build -t aegis-ml .
-#   docker build --build-arg EXTRAS=hf -t aegis-ml:hf .
+#   docker build --build-arg EXTRAS=serve -t aegis-ml:serve .   # onnx2 / cascade2
 #
 # Run:
 #   docker run -p 8000:8000 -e CLASSIFIER_TYPE=sklearn aegis-ml
@@ -35,7 +35,7 @@ COPY app/ ./app/
 COPY demo/ ./demo/
 COPY training/ ./training/
 
-# Which optional extras to install (default: base only; override with --build-arg EXTRAS=hf)
+# Which optional extras to install (default: base only; --build-arg EXTRAS=serve for onnx2/cascade2)
 ARG EXTRAS=""
 
 # Install locked dependencies into a venv using UV. This intentionally avoids
@@ -86,7 +86,6 @@ ENV PYTHONUNBUFFERED=1
 ENV HOST=0.0.0.0
 ENV PORT=8000
 ENV CLASSIFIER_TYPE=sklearn
-ENV CONFIDENCE_THRESHOLD=0.70
 ENV LOG_LEVEL=INFO
 
 USER aegis

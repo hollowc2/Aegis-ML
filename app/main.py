@@ -195,13 +195,15 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # ── CORS (permissive for demo; tighten in production) ─────────────────────
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    # ── CORS: off unless CORS_ALLOW_ORIGINS lists browser origins ─────────────
+    origins = get_settings().cors_allow_origins
+    if origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins,
+            allow_methods=["GET", "POST"],
+            allow_headers=["Authorization", "Content-Type"],
+        )
 
     # ── Request logging ────────────────────────────────────────────────────────
     app.add_middleware(RequestLoggingMiddleware)

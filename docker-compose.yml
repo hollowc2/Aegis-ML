@@ -23,7 +23,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        EXTRAS: ""       # Set to "hf" to include HuggingFace deps
+        EXTRAS: ""       # Set to "serve" to run onnx2/cascade2 (no PyTorch)
     image: aegis-ml:latest
     container_name: aegis-ml
     restart: unless-stopped
@@ -39,7 +39,7 @@ services:
     environment:
       # ── Classifier ──────────────────────────────────────────────────────────
       CLASSIFIER_TYPE: ${CLASSIFIER_TYPE:-sklearn}
-      CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.70}
+      # CONFIDENCE_THRESHOLD unset = each model's tuned threshold
       SKLEARN_MODEL_PATH: models/sklearn_classifier.joblib
 
       # ── Backend LLM ─────────────────────────────────────────────────────────
@@ -88,7 +88,7 @@ services:
     environment:
       CLASSIFIER_TYPE: ${CLASSIFIER_TYPE:-sklearn}
       SKLEARN_MODEL_PATH: models/sklearn_classifier.joblib
-      CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.70}
+      # CONFIDENCE_THRESHOLD unset = each model's tuned threshold
       DEMO_PORT: 7860
       # Point demo at the running Aegis-ML API service
       AEGIS_API_URL: http://aegis-ml:8000

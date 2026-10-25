@@ -78,6 +78,30 @@ async def forward_to_backend(
     return data
 
 
+def backend_models_url(backend_url: str) -> str:
+    """The backend's /v1/models URL, derived from its chat completions URL."""
+    url = backend_url.rstrip("/")
+    if url.endswith("/chat/completions"):
+        return url.removesuffix("/chat/completions") + "/models"
+    return url + "/v1/models"
+
+
+async def fetch_backend_models(client: httpx.AsyncClient) -> dict[str, Any]:
+    """GET the backend's model list (OpenAI clients probe it before chatting)."""
+    settings = get_settings()
+    headers: dict[str, str] = {}
+    if settings.backend_api_key:
+        headers["Authorization"] = f"Bearer {settings.backend_api_key}"
+    response = await client.get(
+        backend_models_url(settings.backend_url),
+        headers=headers,
+        timeout=settings.backend_timeout,
+    )
+    response.raise_for_status()
+    data: dict[str, Any] = response.json()
+    return data
+
+
 def extract_assistant_content(response_data: dict[str, Any]) -> str:
     """
     Pull the assistant's reply text out of an OpenAI-style response dict.
