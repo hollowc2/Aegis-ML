@@ -345,9 +345,11 @@ async def audit_logs(request: Request, limit: int = 50):
 
 def _safe_text(body: ChatCompletionRequest) -> str:
     """
-    Extract a single string from the request for audit logging.
-    Truncated to 1000 chars to keep the DB tidy.
+    Extract a single string from the request for audit logging: the messages
+    the classifier scanned (SCAN_ROLES), so a long trusted system prompt can't
+    push the untrusted text out. Truncated to 1000 chars to keep the DB tidy.
     """
-    parts = [f"[{m.role.value}]: {m.content}" for m in body.messages]
+    roles = get_settings().scan_roles
+    parts = [f"[{m.role.value}]: {m.content}" for m in body.messages if m.role.value in roles]
     full = "\n".join(parts)
     return full[:1000]

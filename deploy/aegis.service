@@ -1,0 +1,33 @@
+# Aegis-ML as a systemd *user* unit, next to the LLM it protects.
+#
+# Install (see deploy/install.sh, which does this for you):
+#   cp deploy/aegis.service ~/.config/systemd/user/aegis.service
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now aegis.service
+#
+# Runtime lives on local disk (not NFS): code + venv in AEGIS_HOME, settings in
+# ~/.config/aegis/aegis.env, audit DB under AEGIS_HOME/logs.
+
+[Unit]
+Description=Aegis-ML LLM firewall (public LLM traffic)
+After=network.target llama-server.service
+Wants=llama-server.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/.local/share/aegis-runtime
+EnvironmentFile=%h/.config/aegis/aegis.env
+ExecStart=%h/.local/share/aegis-runtime/.venv/bin/python -m app.main
+Restart=on-failure
+RestartSec=5
+# Keep inference off the cores the bot and game use most, at lower priority.
+# The ONNX session uses 4 intra-op threads; give it exactly 4 cores.
+CPUAffinity=12-15
+Nice=5
+# torch-free cascade2 INT8 peaks around 1 GB RSS.
+MemoryHigh=1536M
+MemoryMax=2G
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

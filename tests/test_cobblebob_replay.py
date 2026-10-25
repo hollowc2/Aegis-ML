@@ -189,3 +189,23 @@ async def test_pii_in_a_json_reply_keeps_the_json_parseable(classifier):
 
     content = resp.json()["choices"][0]["message"]["content"]
     assert json.loads(content) == {"answer": "email me at [EMAIL REDACTED]", "count": 8}
+
+
+@pytest.mark.asyncio
+async def test_audit_records_the_visitor_question_not_the_system_prompt(classifier):
+    question = "What are you doing?"
+    settings = Settings(_env_file=None, scan_roles=["user"])
+    audit = AsyncMock()
+    app = create_app()
+    with (
+        patch("app.api.routes.get_settings", return_value=settings),
+        patch("app.guardrails.input_guard.get_settings", return_value=settings),
+        patch("app.api.routes.log_audit_entry", new=audit),
+    ):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            app.state.classifier = classifier
+            app.state.http_client = _backend("hi")
+            app.state.limiter = MagicMock()
+            await client.post("/v1/chat/completions", json=_request(question))
+
+    assert audit.await_args.kwargs["input_text"] == f"[user]: {question}"
