@@ -79,8 +79,7 @@ Only public traffic goes through Aegis. Aegis and the LLM listen on loopback onl
 
 **Still weak**
 - Attacks buried in long documents: only 15–24% caught. Every model is weak here.
-- Untested against the live Qwen model: whether it echoes the `[SYS_REF:…]`
-  canary (checked by the M3 smoke test).
+- No real public traffic reviewed yet (M4 monitor period started 2026-10-24).
 
 ---
 
@@ -121,8 +120,8 @@ Goal: cobblebob's public Q&A path can use Aegis as a drop-in base URL.
       cobblebob's own public system prompt (0.92 FP32 / 0.34 INT8), so this is required.
 - [x] **JSON-safe output guard**: PII inside a JSON object is redacted in its string
       values and the object re-serialised; numbers are never touched.
-- [-] **Canary check** against the live model: moved to the M3 smoke test (needs
-      the real Qwen model on the host).
+- [x] **Canary check** against the live model: Qwen did not echo `[SYS_REF:…]`
+      (M3 smoke test and the M4 live check).
 - [x] **Block response**: Aegis 403 → Blockhead's in-character refusal (`BLOCKED_ANSWER`).
 - [x] **Rate limiting**: per-visitor limits stay in Blockhead (unchanged); Aegis's
       60/min is a global cap behind loopback.
@@ -137,7 +136,7 @@ Goal: cobblebob's public Q&A path can use Aegis as a drop-in base URL.
 **Done:** replay test passes; an end-to-end rehearsal on the dev machine (Blockhead's
 real client → installed Aegis → fake llama-server) behaved as designed in both modes.
 
-### M3 · Deploy on the bot's host (dark) — prepared, not deployed
+### M3 · Deploy on the bot's host (dark) ✅
 Goal: Aegis runs next to the bot and is ready, with no traffic routed to it yet.
 
 - [x] Measure memory: torch-free cascade2 INT8 ~950 MB RSS; ~2.5 ms fast path,
@@ -147,17 +146,18 @@ Goal: Aegis runs next to the bot and is ready, with no traffic routed to it yet.
       rehearsed in a sandbox.
 - [x] **(Blockhead)** Separate base URL used only by the public path
       (`model_questions.base_url`); refuses to run if it equals `llm.base_url`.
-- [ ] **Run the install on the host** (runbook in `DEPLOYMENT.local.md`; needs the
-      owner's go-ahead).
-- [ ] Smoke test on the host: one request through the live model; check the canary
-      isn't echoed and the bot keeps running normally.
+- [x] **Run the install on the host** (2026-10-24): 926 MB RSS, 4 pinned cores,
+      loopback only, monitor mode.
+- [x] Smoke test on the host through the live model: benign questions answered in
+      ~2 s, an injection flagged `would_block`, the model refused it, no canary echo,
+      bot unaffected.
 - [x] Audit DB: retention pruning built in; DB lives on local disk in the runtime dir.
 - [ ] Simple metrics view (scrape `/metrics` with the admin token, or a dashboard panel).
 
 **Done when:** Aegis is running on the host, the smoke test passes, and the bot shows
 no regressions.
 
-### M4 · Public LLM Q&A behind Aegis — built, not launched
+### M4 · Public LLM Q&A behind Aegis — live in monitor mode (since 2026-10-24)
 Goal: anyone on the web can ask cobblebob free-form questions, safely.
 
 - [x] **(Blockhead)** Model-backed public Q&A (`src/dashboard/public-model-chat.ts`,
@@ -166,10 +166,16 @@ Goal: anyone on the web can ask cobblebob free-form questions, safely.
       slow or down, 45 s deadline because the model is shared with the bot.
 - [x] **(Blockhead)** Public Q&A goes only through Aegis; per-IP limits and size caps
       unchanged. Off by default (`model_questions.enabled`).
-- [ ] Merge `public-llm-qa`, enable `questions_enabled` + `model_questions`, deploy
-      (runbook step 2).
+- [x] Merge `public-llm-qa`, enable `questions_enabled` + `model_questions`, deploy
+      (runbook step 2, 2026-10-24). Live check: a benign question and an injection
+      both answered by the model in ~2.5 s; Aegis allowed the first (0.03) and
+      flagged the second `would_block` (1.00); the model refused it in character.
+- [x] **(Blockhead)** Fix found in the live check: the bot's safety interrupts
+      (fired by its own task changes every few seconds) aborted questions waiting
+      on the model, so answers fell back to rules. They now cancel actions only.
 - [ ] Optional soft launch: share the link with a few friends before announcing it.
-- [ ] Launch in **monitor mode**; review `would_block` rows by hand for 1–2 weeks.
+- [x] Launch in **monitor mode** (2026-10-24).
+- [ ] Review `would_block` rows by hand for 1–2 weeks.
       Record attacks vs false alarms.
 - [ ] Tune the threshold on real traffic if needed (record it in decisions).
 - [ ] Switch to **enforce**; a blocked visitor gets the in-character refusal.
@@ -260,6 +266,11 @@ Ideas that are not part of the current path. Pull one in only with a reason.
 ## Changelog
 
 Newest first. One line per shipped item.
+
+- **2026-10-24** M3 done: Aegis installed on the bot's host (dark), smoke test
+  passed through the live model with no canary echo. M4 launched in monitor mode:
+  public visitors' questions are answered by the LLM through Aegis. Fixed in
+  Blockhead during the live check: safety interrupts no longer cut off questions.
 
 - **2026-10-24** M2 done (Aegis: `/v1/models`, monitor mode, `SCAN_ROLES`, admin
   token, CORS, retention, JSON-safe redaction, `serve` extra, replay test). M3
