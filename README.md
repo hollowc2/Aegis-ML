@@ -144,9 +144,11 @@ Compared with the previous release, the bundled sklearn model catches about
 21 more attacks per 100 and wrongly blocks roughly 3.5× fewer benign prompts.
 The transformer adds a couple of points of recall and is much stronger on
 multilingual and obfuscated attacks; the cascade keeps that accuracy while
-sending only the ~24% of prompts sklearn is unsure about to it. INT8 shrinks
-the ONNX graph from 1.1 GB to 323 MB at a cost of about 5 points of recall —
-set `ONNX2_USE_INT8=false` when accuracy matters more than memory. Latency is
+sending only the ~24% of prompts sklearn is unsure about to it. `onnx2` and
+`cascade2` serve the FP32 ONNX graph by default, which scores the same as the
+PyTorch model. INT8 (`ONNX2_USE_INT8=true`) shrinks the graph from 1.1 GB to
+323 MB but costs about 5 points of recall and is only ~5% faster on CPU, so use
+it only when memory is the constraint. Latency is
 single-request on a Ryzen 7 1700 (4 threads) / RX 7700 XT.
 
 The previous release's published 0.998 AUC came from a random split of a

@@ -312,6 +312,39 @@ class TestInputSegmentation:
         clf.predict.assert_not_called()
 
 
+class TestOnnxGraphSelection:
+    """FP32 by default; either precision falls back to the other when absent."""
+
+    @pytest.mark.parametrize(
+        ("present", "use_int8", "expected"),
+        [
+            (["model.onnx", "model_int8.onnx"], False, "model.onnx"),
+            (["model.onnx", "model_int8.onnx"], True, "model_int8.onnx"),
+            (["model_int8.onnx"], False, "model_int8.onnx"),
+            (["model.onnx"], True, "model.onnx"),
+        ],
+    )
+    def test_selection(self, tmp_path, present, use_int8, expected):
+        from app.classifiers.onnx2_classifier import select_onnx_graph
+
+        for name in present:
+            (tmp_path / name).touch()
+        assert select_onnx_graph(tmp_path, use_int8).name == expected
+
+    def test_missing_raises(self, tmp_path):
+        from app.classifiers.onnx2_classifier import select_onnx_graph
+
+        with pytest.raises(FileNotFoundError):
+            select_onnx_graph(tmp_path, use_int8=False)
+
+    def test_default_is_fp32(self):
+        from app.classifiers.onnx2_classifier import ONNX2Classifier
+        from app.config import Settings
+
+        assert ONNX2Classifier("x").use_int8 is False
+        assert Settings.model_fields["onnx2_use_int8"].default is False
+
+
 class TestThresholdResolution:
     """CONFIDENCE_THRESHOLD overrides; otherwise the model's tuned threshold applies."""
 

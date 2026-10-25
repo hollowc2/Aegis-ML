@@ -309,8 +309,11 @@ def _default_threshold(classifier_type: str) -> float | None:
     if path is None or not path.exists():
         return None
     meta = json.loads(path.read_text())
-    if classifier_type == "onnx2" and settings.onnx2_use_int8 and (path.parent / "model_int8.onnx").exists():
-        return meta.get("aegis_threshold_int8", meta.get("aegis_threshold"))
+    if classifier_type == "onnx2":
+        from app.classifiers.onnx2_classifier import select_onnx_graph
+
+        if select_onnx_graph(path.parent, settings.onnx2_use_int8).name == "model_int8.onnx":
+            return meta.get("aegis_threshold_int8", meta.get("aegis_threshold"))
     return meta.get("threshold", meta.get("aegis_threshold"))
 
 

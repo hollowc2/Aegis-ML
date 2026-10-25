@@ -110,7 +110,7 @@ Every `POST /v1/chat/completions` request flows through:
 - `onnx` — ONNX Runtime inference of the Phase 2 model
 - `cascade` — sklearn fast-path with Phase 2 ONNX escalation
 - `hf2` — Phase 3 multi-task mDeBERTa-v3 model with threat categories, ~18 ms on GPU
-- `onnx2` — INT8-capable ONNX inference for Phase 3 (INT8 ~40 ms p50 on 4 CPU threads, ~5 points lower recall than FP32)
+- `onnx2` — ONNX inference for Phase 3. Serves FP32 by default (same scores as `hf2`); `ONNX2_USE_INT8=true` serves the 323 MB INT8 graph, ~5 points lower recall and only ~5% faster on CPU. Either precision falls back to the other if its file is missing
 - `cascade2` — sklearn fast-path with Phase 3 ONNX escalation; sklearn scores inside `CASCADE_SK_LOW/HIGH_THRESHOLD` are decided by the ONNX model alone, using its threshold
 
 All classifiers expose the same async interface and are loaded once at startup. The sklearn classifier wraps synchronous inference in `asyncio.to_thread()` to avoid blocking the event loop.
@@ -134,6 +134,7 @@ All settings live in `.env` (copy from `.env.example`). Key settings:
 |----------|---------|--------|
 | `CLASSIFIER_TYPE` | `sklearn` | Which classifier to load |
 | `CONFIDENCE_THRESHOLD` | unset | Block threshold (0–1); unset = the loaded model's tuned threshold (`models/sklearn_classifier.json`, or `aegis_threshold` / `aegis_threshold_int8` in the ONNX/HF2 `config.json`), else 0.70 |
+| `ONNX2_USE_INT8` | `false` | Serve the INT8 ONNX graph for `onnx2`/`cascade2` (smaller, lower recall) |
 | `BACKEND_URL` | `http://localhost:8080` | llama.cpp / LLM endpoint |
 | `RATE_LIMIT_PER_MINUTE` | `60` | Per-IP rate cap |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./logs/audit.db` | Audit log location |

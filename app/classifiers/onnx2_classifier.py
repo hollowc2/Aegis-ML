@@ -41,6 +41,28 @@ _PROVIDER_PREFERENCE = [
 ]
 
 
+def select_onnx_graph(model_dir: str | Path, use_int8: bool) -> Path:
+    """
+    Return the graph file to serve: the requested precision when present,
+    otherwise whichever one exists (e.g. the HF Space ships only INT8).
+
+    FP32 is the default because dynamic INT8 costs ~5 points of recall at the
+    same FPR (docs/BENCHMARKS.md) and is barely faster on CPU.
+    """
+    path = Path(model_dir)
+    int8_file = path / "model_int8.onnx"
+    fp32_file = path / "model.onnx"
+    preferred, other = (int8_file, fp32_file) if use_int8 else (fp32_file, int8_file)
+    if preferred.exists():
+        return preferred
+    if other.exists():
+        logger.warning("%s not found in %s; serving %s instead", preferred.name, path, other.name)
+        return other
+    raise FileNotFoundError(
+        f"ONNX model not found in {path}. Run: python -m training.phase3_hf2.export_onnx"
+    )
+
+
 class ONNX2Classifier:
     """
     Wraps the exported HF2 ONNX model for runtime inference.
@@ -51,7 +73,7 @@ class ONNX2Classifier:
         config.json                     — with temperature_scaling + aegis_* metadata
     """
 
-    def __init__(self, model_path: str, use_int8: bool = True) -> None:
+    def __init__(self, model_path: str, use_int8: bool = False) -> None:
         self.model_path = model_path
         self.use_int8 = use_int8
         self._session = None
@@ -84,19 +106,8 @@ class ONNX2Classifier:
 
         path = Path(self.model_path)
 
-        # Select model file (INT8 preferred, fallback to FP32)
-        int8_file = path / "model_int8.onnx"
-        fp32_file = path / "model.onnx"
-        if self.use_int8 and int8_file.exists():
-            onnx_file = int8_file
-            force_cpu = True
-        elif fp32_file.exists():
-            onnx_file = fp32_file
-            force_cpu = False
-        else:
-            raise FileNotFoundError(
-                f"ONNX model not found in {path}. Run: python -m training.phase3_hf2.export_onnx"
-            )
+        onnx_file = select_onnx_graph(path, self.use_int8)
+        force_cpu = onnx_file.name == "model_int8.onnx"
 
         # Provider selection — INT8 only works on CPU
         if force_cpu:

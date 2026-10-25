@@ -69,7 +69,8 @@ def _load_classifier(classifier_type: str):
             from app.classifiers.onnx2_classifier import ONNX2Classifier
 
             clf = ONNX2Classifier(
-                model_path=os.getenv("ONNX2_MODEL_PATH", "models/hf2_classifier_onnx")
+                model_path=os.getenv("ONNX2_MODEL_PATH", "models/hf2_classifier_onnx"),
+                use_int8=os.getenv("ONNX2_USE_INT8", "false").lower() == "true",
             )
             clf.load()
         else:
@@ -244,7 +245,7 @@ async def chat_with_aegis(
                 "sklearn": "TF-IDF + LogReg (Phase 1)",
                 "hf": "DistilBERT/DeBERTa (Phase 2)",
                 "hf2": "mDeBERTa-v3 Multi-Task (Phase 3)",
-                "onnx2": "mDeBERTa-v3 Multi-Task ONNX INT8 (Phase 3)",
+                "onnx2": "mDeBERTa-v3 Multi-Task ONNX (Phase 3)",
             }.get(classifier_type, classifier_type)
         analysis_lines.append(f"**Model:** {model_label}")
         analysis_lines.append(f"**Verdict:** {'🚫 BLOCKED' if is_malicious else '✅ ALLOWED'}")
@@ -456,7 +457,7 @@ def build_ui(available_classifiers: list[str] | None = None) -> gr.Blocks:
                         label="Available classifier",
                         info=(
                             "Only model artifacts loaded in this runtime are shown. "
-                            "sklearn = Phase 1 · onnx2 = Phase 3 INT8."
+                            "sklearn = Phase 1 · onnx2 = Phase 3 ONNX."
                         ),
                     )
                     show_details = gr.Checkbox(
@@ -641,7 +642,7 @@ def main() -> None:
         "hf2": os.getenv("HF2_MODEL_PATH", "models/hf2_classifier"),
         "onnx2": os.getenv(
             "ONNX2_MODEL_PATH",
-            "models/hf2_classifier_onnx/model_int8.onnx",
+            "models/hf2_classifier_onnx",
         ),
     }
     for classifier_type, model_path in model_paths.items():

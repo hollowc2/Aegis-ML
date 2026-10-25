@@ -76,7 +76,9 @@ def loaded_classifier():
     elif clf_type == "onnx2":
         from app.classifiers.onnx2_classifier import ONNX2Classifier
 
-        clf = ONNX2Classifier(model_path=settings.onnx2_model_path)
+        clf = ONNX2Classifier(
+            model_path=settings.onnx2_model_path, use_int8=settings.onnx2_use_int8
+        )
         clf.load()
     elif clf_type == "sklearn":
         from app.classifiers.sklearn_classifier import SklearnClassifier

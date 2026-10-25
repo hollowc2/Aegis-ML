@@ -51,7 +51,7 @@ class Settings(BaseSettings):
             description=(
                 "Which classifier to use: 'sklearn' (Phase 1), 'hf' (Phase 2), "
                 "'onnx' (Phase 2 via ONNX Runtime), 'cascade' (sklearn + ONNX), "
-                "'hf2' (Phase 3 multi-task), 'onnx2' (Phase 3 ONNX INT8), "
+                "'hf2' (Phase 3 multi-task), 'onnx2' (Phase 3 ONNX), "
                 "or 'cascade2' (sklearn fast path + ONNX2 slow path)"
             ),
         )
@@ -90,8 +90,11 @@ class Settings(BaseSettings):
         description="Path to the Phase 3 ONNX-exported HF2 model directory",
     )
     onnx2_use_int8: bool = Field(
-        default=True,
-        description="Use INT8-quantised ONNX model for onnx2/cascade2 (falls back to FP32 if absent)",
+        default=False,
+        description=(
+            "Serve the INT8-quantised ONNX graph for onnx2/cascade2 (smaller, ~5 points "
+            "lower recall). Either precision falls back to the other if its file is absent."
+        ),
     )
 
     # ── Text Preprocessing ────────────────────────────────────────────────────

@@ -24,7 +24,18 @@ ROC-AUC on the external set: v1 0.928 · sklearn 0.985 · mDeBERTa 0.987 · ONNX
 
 ‡ Measured with the PyTorch model as the slow path (`eval_suite --model cascade2_hf2`). The FP32 ONNX graph is checked against PyTorch at export (identical test AUC, 0.9956 on 500 rows), so FP32 ONNX serving behaves like the mDeBERTa rows.
 
-**INT8 trade-off.** Dynamic INT8 cuts the graph from 1.1 GB to 323 MB and runs on any CPU, but costs about 5 points of external recall at the same FPR budget. Use FP32 ONNX (`ONNX2_USE_INT8=false`) when accuracy matters more than memory. The cascade sends only uncertain prompts to the transformer and keeps the transformer's accuracy.
+**INT8 trade-off.** Dynamic INT8 cuts the graph from 1.1 GB to 323 MB, but costs about 5 points of external recall at the same FPR budget (15 points on holdout) and is only ~5% faster on CPU (see latency below). `onnx2`/`cascade2` therefore serve FP32 by default; set `ONNX2_USE_INT8=true` only when memory is the constraint. On the 43 demo prompts the FP32 graph agreed with PyTorch on every verdict, while INT8 missed six that both catch, mostly paraphrased system-prompt extraction.
+
+Keeping more of the graph in FP32 does not recover the loss. Scored on val (n=1,674, threshold re-picked per graph at FPR ≤ 2%):
+
+| Graph | Val AUC | Val recall |
+|---|---:|---:|
+| FP32 | 0.994 | 95.7 |
+| INT8, current (all MatMul + embedding) | 0.984 | 90.6 |
+| INT8, MatMul only (embedding and heads FP32) | 0.985 | 90.3 |
+| INT8, FFN MatMuls only (attention FP32) | 0.983 | 91.8 |
+
+The FFN layers alone account for the drop, so a smaller INT8 graph would need static (calibrated) quantization or quantization-aware training. The cascade sends only uncertain prompts to the transformer and keeps the transformer's accuracy.
 
 INT8 scores also vary a little between machines. The same INT8 graph on the
 Hugging Face Space (different CPU) matched local scores to a median of 0.003
@@ -53,6 +64,16 @@ the transformer, roughly linearly up to the 512-token limit.
 | hf2 (PyTorch, GPU) | 18.2 ms | 19.2 ms | 18.6 ms |
 | onnx2 INT8 (CPU) | 39 ms | 266 ms | 76 ms |
 | cascade2 INT8 (CPU; 24% escalated) | 2.0 ms | 67 ms | 15 ms |
+
+FP32 against INT8, measured back to back in a later session on the same
+machine (both slower than the rows above that day, so compare within the pair):
+
+| Classifier | p50 | p95 | mean |
+|---|---:|---:|---:|
+| onnx2 INT8 (CPU) | 66 ms | 626 ms | 153 ms |
+| onnx2 FP32 (CPU) | 69 ms | 643 ms | 159 ms |
+| cascade2 INT8 (CPU; 24% escalated) | 2.0 ms | 137 ms | 27 ms |
+| cascade2 FP32 (CPU; 24% escalated) | 2.0 ms | 142 ms | 28 ms |
 
 The classifier is called once per message window, so a request's
 classification cost scales with its number of messages.
