@@ -108,8 +108,9 @@ Every `POST /v1/chat/completions` request flows through:
 | `app/guardrails/output_guard.py` | Canary leak detection, PII redaction, harmful content filter |
 | `app/classifiers/` | sklearn, ONNX (mDeBERTa) and cascade classifiers |
 | `app/proxy/llm_proxy.py` | Canary injection into forwarded request, response content extraction/patching |
-| `app/api/routes.py` | FastAPI routes: `/v1/chat/completions`, `/health`, `/metrics`, `/audit/logs` |
+| `app/api/routes.py` | FastAPI routes: `/v1/chat/completions`, `/v1/models`, `/health`, `/metrics`, `/audit/logs` |
 | `app/models/database.py` | Async SQLite via aiosqlite; single `audit_log` table |
+| `deploy/` | systemd user unit, production env template, idempotent `install.sh` |
 
 ### Classifier Types (set via `CLASSIFIER_TYPE` in `.env`)
 
@@ -145,6 +146,10 @@ All settings live in `.env` (copy from `.env.example`). Key settings:
 | `RATE_LIMIT_PER_MINUTE` | `60` | Per-IP rate cap |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./logs/audit.db` | Audit log location |
 | `REDACT_PROMPTS_IN_LOGS` | `false` | Omit input text from audit log |
+| `ENFORCEMENT_MODE` | `enforce` | `monitor`: input blocks logged as `would_block`, request forwarded; output guard always enforced |
+| `SCAN_ROLES` | all roles | Roles the input classifier scores (production behind cobblebob: `user`) |
+| `ADMIN_TOKEN` | unset | Bearer token for `/audit/logs` (disabled if unset) and `/metrics` |
+| `AUDIT_RETENTION_DAYS` | `0` | Prune audit entries older than N days |
 
 ## Prometheus Metrics
 

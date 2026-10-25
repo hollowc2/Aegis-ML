@@ -222,6 +222,10 @@ Copy `.env.example` to `.env`. Common settings:
 | `CONFIDENCE_THRESHOLD` | model's tuned value | Block at or above this malicious probability; unset uses the threshold tuned for the loaded model |
 | `RATE_LIMIT_PER_MINUTE` | `60` | Per-IP request limit |
 | `REDACT_PROMPTS_IN_LOGS` | `false` | Exclude prompt text from audit records |
+| `ENFORCEMENT_MODE` | `enforce` | `monitor` records input-classifier blocks as `would_block` and forwards anyway; the output guard is enforced either way |
+| `SCAN_ROLES` | all roles | Message roles the input classifier scores, e.g. `user` when your app writes the system prompt |
+| `ADMIN_TOKEN` | unset | Bearer token for `/audit/logs` (disabled without one) and `/metrics` |
+| `AUDIT_RETENTION_DAYS` | `0` | Delete audit entries older than this (0 = keep) |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./logs/aegis_audit.db` | Audit database |
 
 The template documents model paths, cascade thresholds, preprocessing controls,
