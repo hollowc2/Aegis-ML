@@ -45,6 +45,20 @@ class Settings(BaseSettings):
     )
     # Timeout in seconds for forwarding requests to the backend
     backend_timeout: float = Field(default=120.0, ge=1.0)
+    backend_stream: bool = Field(
+        default=False,
+        description=(
+            "Request a streamed reply from the backend and assemble it into the usual "
+            "non-streaming response. llama-server reliably stops generating when a "
+            "streamed request's connection closes, but often finishes a non-streamed "
+            "one, so only this mode makes caller disconnects cancel backend work."
+        ),
+    )
+    backend_max_response_bytes: int = Field(
+        default=1_048_576,
+        ge=1024,
+        description="Largest backend reply read; larger replies fail as backend errors.",
+    )
 
     # ── Classifier ───────────────────────────────────────────────────────────
     classifier_type: Literal["sklearn", "onnx2", "cascade2"] = Field(
@@ -126,6 +140,16 @@ class Settings(BaseSettings):
         description=(
             "Cascade: sklearn malicious_prob ≥ this is treated as malicious without "
             "calling the ONNX model (fast path)"
+        ),
+    )
+
+    input_guard_timeout: float = Field(
+        default=5.0,
+        gt=0.0,
+        le=60.0,
+        description=(
+            "Seconds the input classifier may take for one request. A slower or failing "
+            "classifier blocks the request (guard_unavailable) in every enforcement mode."
         ),
     )
 

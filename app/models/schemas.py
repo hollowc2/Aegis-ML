@@ -128,6 +128,8 @@ class InputGuardrailResult(BaseModel):
     probabilities: dict[str, float] = Field(default_factory=dict)
     # Phase 3: ML-learned threat category probabilities (hf2/onnx2 only; empty for Phase 1/2)
     threat_category_probs: dict[str, float] = Field(default_factory=dict)
+    # The classifier failed or timed out: blocked fail-secure, not judged malicious
+    guard_error: bool = False
 
 
 class OutputGuardrailResult(BaseModel):
@@ -139,6 +141,8 @@ class OutputGuardrailResult(BaseModel):
     reason: str = ""
     # Cleaned / redacted content (same as original when nothing was redacted)
     content: str = ""
+    # The output guard itself failed: blocked fail-secure, not judged harmful
+    guard_error: bool = False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -181,6 +185,35 @@ class BlockedResponse(BaseModel):
             "code": "prompt_injection_detected",
         }
     )
+
+
+class ReadinessResponse(BaseModel):
+    """Versioned enforcement readiness for callers that must not run unguarded.
+
+    Settings that shape the guarantee only; never the backend URL or tokens.
+    """
+
+    schema_: Literal["aegis.readiness/1"] = Field(
+        default="aegis.readiness/1", serialization_alias="schema"
+    )
+    service: Literal["aegis-ml"] = "aegis-ml"
+    version: str = "1.0.0"
+    revision: str = "unknown"
+    instance: str = ""
+    ready: bool = False
+    reasons: list[str] = Field(default_factory=list)
+    enforcement: Literal["enforce", "monitor"] = "enforce"
+    classifier: str = "unknown"
+    classifier_loaded: bool = False
+    scan_roles: list[str] = Field(default_factory=list)
+    input_guard_timeout_ms: int = 0
+    require_enforcement_header: str = ""
+    backend_redirects: bool = False
+    backend_stream: bool = False
+    cancel_on_disconnect: bool = False
+    audit_prompt_text: bool = True
+    audit_retention_days: float = 0
+    backend_inflight: int = 0
 
 
 class HealthResponse(BaseModel):

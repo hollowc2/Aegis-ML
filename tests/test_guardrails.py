@@ -276,6 +276,7 @@ class TestInputSegmentation:
         s.enable_text_preprocessing = True
         s.preprocess_invisible_char_bias = 0.15
         s.max_scan_segments = max_segments
+        s.input_guard_timeout = 5.0
         s.scan_roles = list(scan_roles)
         return s
 

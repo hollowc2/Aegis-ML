@@ -115,17 +115,23 @@ async def run_input_guardrail(
         )
 
     try:
-        results = await asyncio.gather(*(_classify(s, classifier, settings) for s in segments))
+        results = await asyncio.wait_for(
+            asyncio.gather(*(_classify(s, classifier, settings) for s in segments)),
+            timeout=settings.input_guard_timeout,
+        )
         result = max(results, key=lambda r: r.confidence)
     except Exception as exc:
-        # Fail-secure: any error in the classifier pipeline blocks the request
-        logger.error("Input guardrail classification error (fail-secure block): %s", exc)
+        # Fail-secure: any error or timeout in the classifier pipeline blocks the
+        # request. Only the exception type is logged: messages can quote input.
+        kind = "timeout" if isinstance(exc, TimeoutError) else type(exc).__name__
+        logger.error("Input guardrail unavailable (fail-secure block): %s", kind)
         return InputGuardrailResult(
             verdict=GuardrailVerdict.block,
             is_malicious=True,
             confidence=1.0,
             threat_category=ThreatCategory.prompt_injection,
-            reason=f"Classifier error — fail-secure block: {exc}",
+            reason=f"Classifier unavailable ({kind}) — fail-secure block",
+            guard_error=True,
         )
 
     return result
@@ -149,7 +155,9 @@ async def _classify(
             preprocessor = TextPreprocessor()
             cleaned_text, preprocess_flags = preprocessor.preprocess(text)
         except Exception as exc:
-            logger.warning("TextPreprocessor failed (continuing with raw text): %s", exc)
+            logger.warning(
+                "TextPreprocessor failed (continuing with raw text): %s", type(exc).__name__
+            )
 
     # Both classifier types expose a unified async .predict(text) → dict interface
     prediction = await classifier.predict(cleaned_text)

@@ -87,12 +87,14 @@ Evaluation rules (see docs/BENCHMARKS.md):
 
 Every `POST /v1/chat/completions` request flows through:
 
-1. **Rate Limiting** — slowapi per-IP throttle (`RATE_LIMIT_PER_MINUTE`)
-2. **Input Guardrail** — ML classifier scores every message separately (long messages in overlapping ~2000-char windows, capped by `MAX_SCAN_SEGMENTS`); blocks with HTTP 403 if the highest `malicious_prob` reaches the threshold (`resolve_threshold` in `app/classifiers/__init__.py`)
+1. **Rate Limiting** — slowapi per-IP throttle (`RATE_LIMIT_PER_MINUTE`); then, if the caller sent `x-aegis-require-enforcement`, a 503 `enforcement_unavailable` unless enforcing with a loaded classifier (`readiness_reasons`)
+2. **Input Guardrail** — ML classifier scores every message separately (long messages in overlapping ~2000-char windows, capped by `MAX_SCAN_SEGMENTS`); blocks with HTTP 403 if the highest `malicious_prob` reaches the threshold (`resolve_threshold` in `app/classifiers/__init__.py`); a classifier error or `INPUT_GUARD_TIMEOUT` blocks with code `guard_unavailable` in every mode
 3. **Canary Token Injection** — random UUID-grade token embedded as `[SYS_REF:TOKEN]` in the system prompt
-4. **Reverse Proxy** — httpx async client forwards to `BACKEND_URL` (llama.cpp / OpenAI-compatible endpoint)
+4. **Reverse Proxy** — httpx async client forwards to `BACKEND_URL` (llama.cpp / OpenAI-compatible endpoint) via `backend_call`: no redirects, bounded by `BACKEND_TIMEOUT` in total, counted in `backend_inflight`, and cancelled (connection closed) when the caller disconnects; `BACKEND_STREAM` streams upstream so llama-server actually stops
 5. **Output Guardrail** — checks for canary leak (→ block), applies PII redaction (regex: SSN, CC, email, phone, IPv4, AWS keys), and harmful keyword filter
-6. **Audit Log** — every request written to SQLite with verdict, threat type, latency
+6. **Audit Log** — every request written to SQLite with verdict, threat type, latency (backend errors and cancellations as fixed `output_verdict` codes); `GET /aegis/readiness` reports `aegis.readiness/1`
+
+Exception messages are never logged (only their type): they can quote prompts or replies.
 
 **Fail-secure**: any exception in guardrail code blocks the request rather than allowing it through.
 
@@ -150,6 +152,8 @@ All settings live in `.env` (copy from `.env.example`). Key settings:
 | `SCAN_ROLES` | all roles | Roles the input classifier scores (production behind cobblebob: `user`) |
 | `ADMIN_TOKEN` | unset | Bearer token for `/audit/logs` (disabled if unset) and `/metrics` |
 | `AUDIT_RETENTION_DAYS` | `0` | Prune audit entries older than N days |
+| `BACKEND_STREAM` | `false` | Stream upstream, assemble one reply; needed for disconnects to stop llama-server |
+| `INPUT_GUARD_TIMEOUT` | `5` | Seconds for input classification; slower/failing → `guard_unavailable` block |
 
 ## Prometheus Metrics
 

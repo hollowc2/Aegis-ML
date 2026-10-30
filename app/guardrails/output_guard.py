@@ -95,13 +95,15 @@ async def run_output_guardrail(
     try:
         return await _check(content, request_id)
     except Exception as exc:
-        logger.error("Output guardrail error (fail-secure block): %s", exc)
+        # Only the exception type: messages can quote the model's reply.
+        logger.error("Output guardrail error (fail-secure block): %s", type(exc).__name__)
         return OutputGuardrailResult(
             verdict=GuardrailVerdict.block,
             is_safe=False,
             threat_category=ThreatCategory.prompt_injection,
-            reason=f"Output guardrail error — fail-secure block: {exc}",
+            reason=f"Output guardrail error ({type(exc).__name__}) — fail-secure block",
             content="[RESPONSE BLOCKED]",
+            guard_error=True,
         )
 
 

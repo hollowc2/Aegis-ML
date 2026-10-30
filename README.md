@@ -196,6 +196,7 @@ curl http://localhost:8000/v1/chat/completions \
 |---|---|
 | `POST /v1/chat/completions` | Guarded OpenAI-compatible chat completion |
 | `GET /health` | Service and classifier readiness |
+| `GET /aegis/readiness` | Versioned enforcement readiness (`aegis.readiness/1`): enforcement mode, classifier, scanned roles, prompt retention, open backend requests |
 | `GET /metrics` | Prometheus metrics |
 | `GET /audit/logs?limit=50` | Recent security decisions |
 
@@ -226,7 +227,18 @@ Copy `.env.example` to `.env`. Common settings:
 | `SCAN_ROLES` | all roles | Message roles the input classifier scores, e.g. `user` when your app writes the system prompt |
 | `ADMIN_TOKEN` | unset | Bearer token for `/audit/logs` (disabled without one) and `/metrics` |
 | `AUDIT_RETENTION_DAYS` | `0` | Delete audit entries older than this (0 = keep) |
+| `BACKEND_STREAM` | `false` | Stream from the backend internally so caller disconnects stop generation (`cancel_on_disconnect` in readiness) |
+| `INPUT_GUARD_TIMEOUT` | `5` | Seconds the input classifier may take; slower or failing classification blocks (`guard_unavailable`) in every mode |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./logs/aegis_audit.db` | Audit database |
+
+A caller that must never be served unguarded sends `x-aegis-require-enforcement`:
+Aegis then refuses with 503 `enforcement_unavailable` in monitor mode or without a
+loaded classifier, before classifying or forwarding. Every proxied reply carries
+`x-aegis-enforcement: enforce|monitor`. Backend redirects are never followed, and a
+caller that disconnects cancels its backend request by closing the connection. With
+`BACKEND_STREAM=true` Aegis streams from the backend internally (the caller still gets
+one non-streaming reply), so llama-server stops generating at its next token; it often
+finishes a non-streamed request whose connection was closed.
 
 The template documents model paths, cascade thresholds, preprocessing controls,
 and service settings.

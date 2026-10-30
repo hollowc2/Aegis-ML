@@ -10,6 +10,7 @@ the request but before it is forwarded.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -63,6 +64,9 @@ async def forward_to_backend(
         headers["Authorization"] = f"Bearer {settings.backend_api_key}"
 
     # ── Step 3: POST to backend ────────────────────────────────────────────────
+    if settings.backend_stream and not patched_payload.get("stream"):
+        return await _forward_streamed(client, patched_payload, headers, request_id)
+
     response = await client.post(
         settings.backend_url,
         json=patched_payload,
@@ -76,6 +80,70 @@ async def forward_to_backend(
         "Backend responded with status %d for request %s", response.status_code, request_id
     )
     return data
+
+
+async def _forward_streamed(
+    client: httpx.AsyncClient,
+    payload: dict[str, Any],
+    headers: dict[str, str],
+    request_id: str,
+) -> dict[str, Any]:
+    """Stream the reply from the backend and assemble a chat.completion dict.
+
+    The caller still gets one non-streaming response, but the backend writes
+    every token to the open connection, so closing it (the caller left)
+    makes llama-server cancel the task at its next write.
+    """
+    settings = get_settings()
+    parts: list[str] = []
+    finish_reason: str | None = None
+    meta: dict[str, Any] = {}
+    usage: dict[str, Any] | None = None
+    received = 0
+    async with client.stream(
+        "POST",
+        settings.backend_url,
+        json={**payload, "stream": True},
+        headers=headers,
+        timeout=settings.backend_timeout,
+    ) as response:
+        response.raise_for_status()
+        async for line in response.aiter_lines():
+            received += len(line) + 1
+            if received > settings.backend_max_response_bytes:
+                raise ValueError("backend reply too large")
+            if not line.startswith("data:"):
+                continue
+            data = line[5:].strip()
+            if data == "[DONE]":
+                break
+            chunk = json.loads(data)
+            if not isinstance(chunk, dict) or "error" in chunk:
+                raise ValueError("backend stream error")
+            for key in ("id", "created", "model", "system_fingerprint"):
+                if key in chunk and key not in meta:
+                    meta[key] = chunk[key]
+            for choice in chunk.get("choices") or []:
+                delta = choice.get("delta") or {}
+                if isinstance(delta.get("content"), str):
+                    parts.append(delta["content"])
+                if choice.get("finish_reason"):
+                    finish_reason = choice["finish_reason"]
+            if isinstance(chunk.get("usage"), dict):
+                usage = chunk["usage"]
+    logger.debug("Backend stream complete for request %s", request_id)
+    return {
+        **meta,
+        "object": "chat.completion",
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": "".join(parts)},
+                "finish_reason": finish_reason,
+            }
+        ],
+        **({"usage": usage} if usage is not None else {}),
+    }
 
 
 def backend_models_url(backend_url: str) -> str:

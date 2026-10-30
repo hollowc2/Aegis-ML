@@ -13,8 +13,11 @@ Manages the app lifespan (startup / shutdown):
 from __future__ import annotations
 
 import logging
+import os
 import sys
+import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import httpx
 import uvicorn
@@ -41,6 +44,8 @@ def _configure_logging(level: str) -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    # aiosqlite logs every statement's parameters at DEBUG: audit text included.
+    logging.getLogger("aiosqlite").setLevel(logging.WARNING)
 
 
 logger = logging.getLogger(__name__)
@@ -67,6 +72,11 @@ async def lifespan(app: FastAPI):
             settings.cascade_sk_high_threshold,
         )
 
+    app.state.revision = source_revision()
+    app.state.instance = uuid.uuid4().hex
+    app.state.backend_inflight = 0
+    logger.info("Revision        : %s", app.state.revision)
+
     # ── Init DB ────────────────────────────────────────────────────────────────
     await init_db()
 
@@ -80,9 +90,11 @@ async def lifespan(app: FastAPI):
     )
 
     # ── Shared HTTP client ─────────────────────────────────────────────────────
+    # Redirects are never followed: a 3xx from the backend is an error, so a
+    # guarded request can't be steered to another host.
     app.state.http_client = httpx.AsyncClient(
         timeout=httpx.Timeout(settings.backend_timeout),
-        follow_redirects=True,
+        follow_redirects=False,
         limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
     )
 
@@ -93,6 +105,20 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down Aegis-ML...")
     await app.state.http_client.aclose()
     logger.info("GG.")
+
+
+def source_revision() -> str:
+    """The deployed commit: AEGIS_REVISION, else the checkout's detached HEAD."""
+    if rev := os.environ.get("AEGIS_REVISION", "").strip():
+        return rev
+    git = Path(__file__).resolve().parents[1] / ".git"
+    try:
+        head = (git / "HEAD").read_text().strip()
+        if head.startswith("ref: "):
+            head = (git / head.removeprefix("ref: ")).read_text().strip()
+    except OSError:
+        return "unknown"
+    return head if len(head) == 40 and all(c in "0123456789abcdef" for c in head) else "unknown"
 
 
 def _load_classifier(settings):

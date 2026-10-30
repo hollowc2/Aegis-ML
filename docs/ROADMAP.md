@@ -178,6 +178,15 @@ Goal: anyone on the web can ask cobblebob free-form questions, safely.
 - [ ] Review `would_block` rows by hand for 1–2 weeks.
       Record attacks vs false alarms.
 - [ ] Tune the threshold on real traffic if needed (record it in decisions).
+- [~] **Enforcement guarantees for the public caller** (branch `public-enforcement`,
+      2026-10-29, not deployed): `x-aegis-require-enforcement` refuses (503) in monitor
+      mode or without a classifier; classifier errors/timeouts block in every mode
+      (`guard_unavailable`); `GET /aegis/readiness` (`aegis.readiness/1`); no backend
+      redirects; caller disconnect cancels the backend request, and `BACKEND_STREAM`
+      makes llama-server actually stop; content-free error logs; `deploy/public-enforce.*`.
+      **(Blockhead)** public questions require that readiness, the header and an
+      `x-aegis-enforcement: enforce` reply, and hold the model until Aegis shows no open
+      backend request. Model Q&A was switched off on 2026-10-29 pending this.
 - [ ] Switch to **enforce**; a blocked visitor gets the in-character refusal.
 - [ ] Record the first real blocked attacks (redacted) for the write-up.
 
@@ -248,6 +257,21 @@ Record new decisions in this format: date, decision, why.
 - **2026-10-24 · Single worker.** The canary store is in-memory, and llama-server
   serializes requests anyway, so the LLM is the bottleneck, not Aegis.
 
+- **2026-10-29 · Public callers can require enforcement per request.** Monitor mode
+  stays useful for other callers, but cobblebob's public Q&A must never be forwarded
+  unguarded, so it sends a header that turns monitor mode or an unloaded classifier
+  into a 503 before any classification or backend work. Readiness is versioned so
+  a generic 200 (llama.cpp's own endpoints) can't pass for it.
+- **2026-10-29 · Classifier failure blocks in every mode.** Monitor mode used to forward
+  a request whose classification failed; an unscanned request is now never forwarded.
+- **2026-10-29 · Stream from llama-server to make cancellation real.** Measured on
+  llama.cpp b11425: closing a non-streamed request's connection usually leaves the
+  task running to completion; a streamed request is cancelled at its next token.
+  `BACKEND_STREAM` keeps the caller-facing reply non-streaming.
+- **2026-10-29 · Audit keeps no visitor text for the public deployment.**
+  `REDACT_PROMPTS_IN_LOGS=true`, 7-day retention; aiosqlite's DEBUG logger (which
+  echoes SQL parameters) is silenced, and errors log exception types only.
+
 ## Parking lot
 
 Ideas that are not part of the current path. Pull one in only with a reason.
@@ -266,6 +290,11 @@ Ideas that are not part of the current path. Pull one in only with a reason.
 ## Changelog
 
 Newest first. One line per shipped item.
+
+- **2026-10-29** Enforcement guarantees for the public caller built and validated on
+  an isolated stack (branch `public-enforcement`); see Blockhead
+  `docs/public-model-answer-enablement.md`. Not deployed: production is still
+  `ec36ec9` in monitor mode, and cobblebob's model Q&A is off.
 
 - **2026-10-24** M3 done: Aegis installed on the bot's host (dark), smoke test
   passed through the live model with no canary echo. M4 launched in monitor mode:
