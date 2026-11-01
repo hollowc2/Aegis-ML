@@ -79,7 +79,8 @@ Only public traffic goes through Aegis. Aegis and the LLM listen on loopback onl
 
 **Still weak**
 - Attacks buried in long documents: only 15–24% caught. Every model is weak here.
-- No real public traffic reviewed yet (M4 monitor period started 2026-10-24).
+- No real public traffic reviewed yet (M4 monitor period started 2026-10-24;
+  enforcing since 2026-10-29).
 
 ---
 
@@ -157,7 +158,7 @@ Goal: Aegis runs next to the bot and is ready, with no traffic routed to it yet.
 **Done when:** Aegis is running on the host, the smoke test passes, and the bot shows
 no regressions.
 
-### M4 · Public LLM Q&A behind Aegis — live in monitor mode (since 2026-10-24)
+### M4 · Public LLM Q&A behind Aegis — live under enforcement (since 2026-10-29)
 Goal: anyone on the web can ask cobblebob free-form questions, safely.
 
 - [x] **(Blockhead)** Model-backed public Q&A (`src/dashboard/public-model-chat.ts`,
@@ -178,16 +179,17 @@ Goal: anyone on the web can ask cobblebob free-form questions, safely.
 - [ ] Review `would_block` rows by hand for 1–2 weeks.
       Record attacks vs false alarms.
 - [ ] Tune the threshold on real traffic if needed (record it in decisions).
-- [~] **Enforcement guarantees for the public caller** (branch `public-enforcement`,
-      2026-10-29, not deployed): `x-aegis-require-enforcement` refuses (503) in monitor
+- [x] **Enforcement guarantees for the public caller** (`26e0fcc`, branch
+      `public-enforcement`, deployed 2026-10-29): `x-aegis-require-enforcement` refuses (503) in monitor
       mode or without a classifier; classifier errors/timeouts block in every mode
       (`guard_unavailable`); `GET /aegis/readiness` (`aegis.readiness/1`); no backend
       redirects; caller disconnect cancels the backend request, and `BACKEND_STREAM`
       makes llama-server actually stop; content-free error logs; `deploy/public-enforce.*`.
       **(Blockhead)** public questions require that readiness, the header and an
       `x-aegis-enforcement: enforce` reply, and hold the model until Aegis shows no open
-      backend request. Model Q&A was switched off on 2026-10-29 pending this.
-- [ ] Switch to **enforce**; a blocked visitor gets the in-character refusal.
+      backend request. Model Q&A was off on 2026-10-29 until this shipped the same evening.
+- [x] Switch to **enforce**; a blocked visitor gets the in-character refusal
+      (2026-10-29; re-verified end to end on the host 2026-11-01).
 - [ ] Record the first real blocked attacks (redacted) for the write-up.
 
 **Done when:** public Q&A has been live under enforcement for a week with a known,
@@ -291,10 +293,17 @@ Ideas that are not part of the current path. Pull one in only with a reason.
 
 Newest first. One line per shipped item.
 
+- **2026-11-01** Re-verified on the host: `26e0fcc` enforcing; guard-positive refused
+  with no backend launch, an abandoned question cancelled in llama-server, and the
+  audit holds no visitor text. See Blockhead `docs/public-model-answer-verification-2026-11-01.md`.
+
+- **2026-10-29** M4 switched to enforce: `26e0fcc` deployed with `deploy/public-enforce.*`,
+  and cobblebob's model Q&A turned back on behind it. See Blockhead
+  `docs/public-model-answer-deployment-2026-10-29.md`.
+
 - **2026-10-29** Enforcement guarantees for the public caller built and validated on
   an isolated stack (branch `public-enforcement`); see Blockhead
-  `docs/public-model-answer-enablement.md`. Not deployed: production is still
-  `ec36ec9` in monitor mode, and cobblebob's model Q&A is off.
+  `docs/public-model-answer-enablement.md`.
 
 - **2026-10-24** M3 done: Aegis installed on the bot's host (dark), smoke test
   passed through the live model with no canary echo. M4 launched in monitor mode:
